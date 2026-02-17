@@ -567,6 +567,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           ),
           const SizedBox(height: 12),
           SizedBox(
+            width: double.infinity,
             height: 320,
             child: RepaintBoundary(
               child: Container(
