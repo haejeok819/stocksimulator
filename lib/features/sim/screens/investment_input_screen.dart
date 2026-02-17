@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/loading_screen.dart';
 import 'package:stocksimulator/features/sim/state/investment_amount_provider.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class InvestmentInputScreen extends ConsumerStatefulWidget {
   const InvestmentInputScreen({
@@ -37,14 +37,16 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
     100000000,
   ];
 
-  final NumberFormat _formatter = NumberFormat('#,###');
   Timer? _repeatTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(investmentAmountProvider.notifier).setAmount(widget.flowState.investment);
+      final int initialAmount = widget.flowState.investMode == InvestMode.dca
+          ? widget.flowState.dcaAmountPerTrade
+          : widget.flowState.investment;
+      ref.read(investmentAmountProvider.notifier).setAmount(initialAmount);
     });
   }
 
@@ -54,27 +56,11 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
     super.dispose();
   }
 
-  String _formatWon(int value) => '${_formatter.format(value)}원';
+  String _formatWon(int value) => '${AppNumberFormat.formatInt(value)}원';
 
-  String _presetLabel(int value) {
-    if (value >= 100000000) {
-      return '${(value / 100000000).toStringAsFixed(0)}억원';
-    }
-    if (value >= 10000) {
-      return '${(value / 10000).toStringAsFixed(0)}만원';
-    }
-    return _formatWon(value);
-  }
+  String _presetLabel(int value) => _formatWon(value);
 
-  String _approxKorean(int value) {
-    if (value >= 100000000) {
-      return '약 ${(value / 100000000).toStringAsFixed(1)}억원';
-    }
-    if (value >= 10000) {
-      return '약 ${(value / 10000).toStringAsFixed(0)}만원';
-    }
-    return '약 ${_formatter.format(value)}원';
-  }
+  String _approxKorean(int value) => '약 ${AppNumberFormat.formatInt(value)}원';
 
   void _onFineTuneTap(int delta) {
     ref.read(investmentAmountProvider.notifier).addAmount(delta);
@@ -213,10 +199,10 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
                     Row(
                       children: <int>[-100000, -10000, 10000, 100000].map((int delta) {
                         final String label = switch (delta) {
-                          -100000 => '-10만',
-                          -10000 => '-1만',
-                          10000 => '+1만',
-                          _ => '+10만',
+                          -100000 => '-100,000',
+                          -10000 => '-10,000',
+                          10000 => '+10,000',
+                          _ => '+100,000',
                         };
                         return Expanded(
                           child: Padding(
@@ -250,7 +236,11 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
                 ),
                 onPressed: canStart
                     ? () {
-                        widget.flowState.setInvestment(amount);
+                        if (widget.flowState.investMode == InvestMode.dca) {
+                          widget.flowState.setDcaAmountPerTrade(amount);
+                        } else {
+                          widget.flowState.setInvestment(amount);
+                        }
                         Navigator.of(context).push(
                           buildRightSlideRoute(
                             LoadingScreen(
