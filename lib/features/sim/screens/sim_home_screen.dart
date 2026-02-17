@@ -230,6 +230,7 @@ class _MarketToggle extends StatelessWidget {
                 color: const Color(0xFF5677E7),
                 borderRadius: BorderRadius.circular(999),
               ),
+              child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
           ),
           ),
