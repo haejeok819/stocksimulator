@@ -219,7 +219,8 @@ class _MarketToggle extends StatelessWidget {
       ),
       child: Stack(
         children: <Widget>[
-          AnimatedAlign(
+          IgnorePointer(
+            child: AnimatedAlign(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             alignment: krSelected ? Alignment.centerLeft : Alignment.centerRight,
@@ -229,7 +230,9 @@ class _MarketToggle extends StatelessWidget {
                 color: const Color(0xFF5677E7),
                 borderRadius: BorderRadius.circular(999),
               ),
+              child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
+          ),
           ),
           Row(
             children: <Widget>[
@@ -344,14 +347,18 @@ class _PremiumSearchBarState extends State<_PremiumSearchBar> {
               ],
             ),
           ),
-          AnimatedOpacity(
-            opacity: widget.query.isEmpty ? 0 : 1,
+          AnimatedSwitcher(
             duration: const Duration(milliseconds: 150),
-            child: IconButton(
-              onPressed: widget.query.isEmpty ? null : widget.onClear,
-              splashRadius: 18,
-              icon: const Icon(Icons.close, size: 18),
-            ),
+            child: widget.query.isEmpty
+                ? const SizedBox(width: 12)
+                : GestureDetector(
+                    key: const ValueKey<String>('clear-button'),
+                    onTap: widget.onClear,
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close, size: 18, color: Color(0xCCFFFFFF)),
+                    ),
+                  ),
           ),
         ],
       ),
