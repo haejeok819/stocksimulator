@@ -2,17 +2,18 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:stocksimulator/data/datasources/price_file_datasource.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
+import 'package:stocksimulator/data/prices/price_repository.dart';
 import 'package:stocksimulator/shared/utils/asset_paths.dart';
 
 class StockRepository {
-  StockRepository({PriceFileDataSource? priceDataSource}) : _priceDataSource = priceDataSource ?? PriceFileDataSource();
+  StockRepository({PriceRepository? priceRepository}) : _priceRepository = priceRepository ?? PriceRepository();
 
-  final PriceFileDataSource _priceDataSource;
+  final PriceRepository _priceRepository;
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
+  final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
   Future<List<StockModel>> getTopStocks({required StockMarket market, String query = ''}) async {
     final String marketCode = market == StockMarket.kr ? 'KR' : 'US';
@@ -24,32 +25,63 @@ class StockRepository {
     return all.where((StockModel stock) => stock.matchesQuery(normalized)).toList();
   }
 
+  Future<List<int>> loadTradingDaysYmd({required String market, required String ticker}) async {
+    final String cacheKey = '$market|$ticker';
+    final List<int>? cached = _tradingDaysCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    final List<int> availableYears = await _priceRepository.availableYears(market: market, ticker: ticker);
+    if (availableYears.isEmpty) {
+      _tradingDaysCache[cacheKey] = <int>[];
+      return <int>[];
+    }
+
+    final bool has2005 = availableYears.contains(2005);
+    final int minYear = has2005 ? 2005 : availableYears.first;
+    final int maxYear = availableYears.last;
+
+    final Set<int> mergedDays = <int>{};
+    for (int year = minYear; year <= maxYear; year++) {
+      try {
+        final Object? decoded = await _priceRepository.loadYearData(
+          market: market,
+          ticker: ticker,
+          year: year,
+        );
+        if (decoded is! List<Object?>) {
+          continue;
+        }
+
+        for (final List<Object?> row in decoded.whereType<List<Object?>>()) {
+          if (row.length < 2) {
+            continue;
+          }
+          mergedDays.add((row[0] as num).toInt());
+        }
+      } catch (error) {
+        debugPrint('Trading day scan skipped: market=$market, ticker=$ticker, year=$year ($error)');
+      }
+    }
+
+    final List<int> sortedDays = mergedDays.toList()..sort();
+    _tradingDaysCache[cacheKey] = sortedDays;
+    return sortedDays;
+  }
+
   Future<List<PricePoint>> loadRange({
     required String market,
     required String ticker,
     required DateTime start,
     required DateTime end,
-  }) async {
-    final int startYear = start.year;
-    final int endYear = end.year;
-    final List<PricePoint> all = <PricePoint>[];
-
-    for (int year = startYear; year <= endYear; year++) {
-      final List<PricePoint> yearly = await _priceDataSource.loadYear(
-        market: market,
-        ticker: ticker,
-        year: year,
-      );
-      all.addAll(yearly);
-    }
-
-    final int startYmd = _toYmd(start);
-    final int endYmd = _toYmd(end);
-
-    return all
-        .where((PricePoint point) => point.ymd >= startYmd && point.ymd <= endYmd)
-        .toList()
-      ..sort((PricePoint a, PricePoint b) => a.ymd.compareTo(b.ymd));
+  }) {
+    return _priceRepository.loadSeries(
+      market: market,
+      ticker: ticker,
+      start: start,
+      end: end,
+    );
   }
 
   List<SimulationPoint> toSimulationSeries({
@@ -60,7 +92,21 @@ class StockRepository {
       return <SimulationPoint>[];
     }
 
-    final double shares = investment / prices.first.close;
+    final double amount = investment.toDouble();
+    final double startClose = prices.first.close;
+    final double endClose = prices.last.close;
+    final double shares = amount / startClose;
+    final double finalValue = shares * endClose;
+    final double profit = finalValue - amount;
+    final double profitRate = profit / amount;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[Simulation] startClose=$startClose, endClose=$endClose, finalValue=$finalValue, '
+        'profit=$profit, profitRate=$profitRate',
+      );
+    }
+
     return prices
         .map(
           (PricePoint point) => SimulationPoint(
@@ -112,6 +158,4 @@ class StockRepository {
       return <StockModel>[];
     }
   }
-
-  int _toYmd(DateTime date) => date.year * 10000 + date.month * 100 + date.day;
 }
