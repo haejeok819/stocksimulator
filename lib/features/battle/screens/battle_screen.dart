@@ -46,9 +46,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
   Timer? _countdownTimer;
   Ticker? _playbackTicker;
   Duration? _lastTick;
+  int _lastUiUpdateMs = 0;
   int _countdown = 0;
   double _speed = 1;
-  bool _pendingFrameUpdate = false;
   bool _finishing = false;
   bool _isPlaying = false;
   BattleRunStatus _playStatus = BattleRunStatus.ready;
@@ -68,20 +68,6 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
 
   Future<List<StockModel>> _loadStocks(StockMarket market, String query) {
     return _repository.getTopStocks(market: market, query: query);
-  }
-
-  void _scheduleFrameUpdate(VoidCallback fn) {
-    if (_pendingFrameUpdate) {
-      return;
-    }
-    _pendingFrameUpdate = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pendingFrameUpdate = false;
-      if (!mounted) {
-        return;
-      }
-      fn();
-    });
   }
 
   Future<StockModel?> _pickStock({required StockMarket initialMarket}) async {
@@ -267,6 +253,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
     _playStatus = BattleRunStatus.running;
     _isPlaying = true;
     _lastTick = null;
+    _lastUiUpdateMs = 0;
     _playbackTicker?.dispose();
     _playbackTicker = createTicker((Duration elapsed) {
       if (!_isPlaying || _playStatus != BattleRunStatus.running || !mounted) {
@@ -280,29 +267,33 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
         return;
       }
 
-      _scheduleFrameUpdate(() {
-        if (!_isPlaying || _playStatus != BattleRunStatus.running) {
-          return;
-        }
+      if (elapsed.inMilliseconds - _lastUiUpdateMs < 16) {
+        return;
+      }
+      _lastUiUpdateMs = elapsed.inMilliseconds;
 
-        final int currentIndex = _progressIndex.value;
-        final double baseSteps = deltaMs / 32.0;
-        final int step = max(1, (baseSteps * _speed).round());
-        final int next = min(currentIndex + step, _points.length - 1);
-        if (next == currentIndex) {
-          return;
-        }
+      final int currentIndex = _progressIndex.value;
+      final double baseSteps = deltaMs / 32.0;
+      final int step = max(1, (baseSteps * _speed).round());
+      final int next = min(currentIndex + step, _points.length - 1);
+      if (next == currentIndex) {
+        return;
+      }
 
-        _progressIndex.value = next;
-        _currentPoint.value = _points[next];
+      _progressIndex.value = next;
+      _currentPoint.value = _points[next];
 
-        if (next >= _points.length - 1) {
-          _isPlaying = false;
-          _playStatus = BattleRunStatus.finished;
-          _playbackTicker?.stop();
+      if (next >= _points.length - 1) {
+        _isPlaying = false;
+        _playStatus = BattleRunStatus.finished;
+        _playbackTicker?.stop();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
           _finishBattle();
-        }
-      });
+        });
+      }
     });
     _playbackTicker?.start();
   }
@@ -555,7 +546,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
       padding: const EdgeInsets.all(16),
       child: Column(
         children: <Widget>[
-          if (_countdown > 0) Text('$_countdown', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
+          Visibility(
+            visible: _countdown > 0,
+            maintainState: true,
+            maintainAnimation: true,
+            maintainSize: true,
+            child: Text('$_countdown', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
+          ),
           Row(
             children: <Widget>[
               Expanded(
@@ -582,7 +579,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
             ],
           ),
           const SizedBox(height: 12),
-          Expanded(
+          SizedBox(
+            height: 320,
             child: RepaintBoundary(
               child: Container(
                 decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
@@ -610,16 +608,24 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
-              if (!(Platform.isWindows && _isPlaying))
-                DropdownButton<double>(
-                  value: _speed,
-                  items: const <DropdownMenuItem<double>>[
-                    DropdownMenuItem(value: 1, child: Text('1x')),
-                    DropdownMenuItem(value: 2, child: Text('2x')),
-                    DropdownMenuItem(value: 4, child: Text('4x')),
-                  ],
-                  onChanged: (double? v) => setState(() => _speed = v ?? 1),
+              Visibility(
+                visible: !(Platform.isWindows && _isPlaying),
+                maintainState: true,
+                maintainAnimation: true,
+                maintainSize: true,
+                child: IgnorePointer(
+                  ignoring: Platform.isWindows && _isPlaying,
+                  child: DropdownButton<double>(
+                    value: _speed,
+                    items: const <DropdownMenuItem<double>>[
+                      DropdownMenuItem(value: 1, child: Text('1x')),
+                      DropdownMenuItem(value: 2, child: Text('2x')),
+                      DropdownMenuItem(value: 4, child: Text('4x')),
+                    ],
+                    onChanged: (double? v) => setState(() => _speed = v ?? 1),
+                  ),
                 ),
+              ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () {
@@ -627,10 +633,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
                     setState(() {
                       _playStatus = BattleRunStatus.paused;
                     });
+                    _playbackTicker?.stop();
                   } else {
                     setState(() {
                       _playStatus = BattleRunStatus.running;
                     });
+                    _lastTick = null;
+                    _playbackTicker?.start();
                   }
                 },
                 child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
