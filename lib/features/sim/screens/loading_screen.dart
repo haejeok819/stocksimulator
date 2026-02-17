@@ -37,6 +37,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         end: widget.flowState.endDate,
       );
       final List<SimulationPoint> series;
+      int initialInvestment = widget.flowState.investment;
       if (widget.flowState.investMode == InvestMode.lumpSum) {
         series = widget.repository.toSimulationSeries(
           prices: prices,
@@ -56,6 +57,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         final Map<int, int> investEventsByYmd = <int, int>{
           for (final int ymd in events) ymd: widget.flowState.dcaAmountPerTrade,
         };
+        initialInvestment = widget.flowState.dcaAmountPerTrade * events.length;
         series = widget.repository.toSimulationSeriesWithEvents(
           prices: prices,
           investEventsByYmd: investEventsByYmd,
@@ -71,6 +73,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
           ChartPlaybackScreen(
             points: series,
             flowState: widget.flowState,
+            initialInvestment: initialInvestment,
           ),
         ),
       );

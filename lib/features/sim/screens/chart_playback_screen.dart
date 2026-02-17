@@ -20,10 +20,12 @@ class ChartPlaybackScreen extends StatefulWidget {
     super.key,
     required this.points,
     required this.flowState,
+    required this.initialInvestment,
   });
 
   final List<SimulationPoint> points;
   final SimulationFlowState flowState;
+  final int initialInvestment;
 
   @override
   State<ChartPlaybackScreen> createState() => _ChartPlaybackScreenState();
@@ -101,7 +103,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
       final int maxIndex = widget.points.length - 1;
       final int speedMultiplier = _speed.round().clamp(1, 8);
-      final int stepSize = (_baseStepSize * speedMultiplier).clamp(1, 240);
+      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 3).round().clamp(1, 240);
 
       int nextIndex = _index;
       final double nextPulse = _pulseTime + 0.16;
@@ -174,8 +176,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     }
 
     final int finalAmount = widget.points.last.value.round();
-    final int profit = finalAmount - widget.flowState.investment;
-    final double profitRate = (profit / widget.flowState.investment) * 100;
+    final int investedAmount = widget.initialInvestment;
+    final int profit = finalAmount - investedAmount;
+    final double profitRate = investedAmount == 0 ? 0 : (profit / investedAmount) * 100;
 
     await _historyRepository.append(
       SimulationResult(
@@ -194,7 +197,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       barrierDismissible: true,
       builder: (BuildContext context) {
         return _ResultDialog(
-          initialAmount: widget.flowState.investment,
+          initialAmount: investedAmount,
           finalAmount: finalAmount,
           profit: profit,
           profitRate: profitRate,
