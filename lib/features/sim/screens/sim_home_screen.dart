@@ -69,6 +69,14 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     };
   }
 
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
   @override
   void dispose() {
     _placeholderTimer?.cancel();
@@ -117,7 +125,6 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E28),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0x10FFFFFF)),
                   ),
                   child: Column(
                     children: <Widget>[
@@ -266,6 +273,7 @@ class _MarketToggle extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => onChanged(StockMarket.kr),
                   child: Center(
                     child: Text(
@@ -280,6 +288,7 @@ class _MarketToggle extends StatelessWidget {
               ),
               Expanded(
                 child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => onChanged(StockMarket.us),
                   child: Center(
                     child: Text(
