@@ -1,0 +1,657 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:intl/intl.dart';
+import 'package:stocksimulator/data/models/stock_model.dart';
+import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
+import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
+import 'package:stocksimulator/shared/utils/ad_helper.dart';
+
+class BattlePlaybackScreen extends ConsumerStatefulWidget {
+  const BattlePlaybackScreen({super.key});
+
+  @override
+  ConsumerState<BattlePlaybackScreen> createState() => _BattlePlaybackScreenState();
+}
+
+class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
+  bool _resultDialogShown = false;
+  String _previousLeader = 'A';
+  bool _flash = false;
+
+  bool get _isMobileRuntime {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(() => ref.read(battlePlaybackControllerProvider.notifier).start());
+  }
+
+  String _koreanName(StockModel? stock) {
+    if (stock == null) return '-';
+    if (stock.nameKo.trim().isNotEmpty) return stock.nameKo.trim();
+    return stock.displayName;
+  }
+
+  String _fmt(double value) => NumberFormat('#,###').format(value.round());
+
+  String _formatYmd(int ymd) {
+    final String s = ymd.toString().padLeft(8, '0');
+    return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
+  }
+
+  Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
+    if (_resultDialogShown || !mounted) return;
+    _resultDialogShown = true;
+
+    final bool aWins = tick.returnA >= tick.returnB;
+    final String winner = aWins ? _koreanName(setup.stockA) : _koreanName(setup.stockB);
+    final double winnerRate = aWins ? tick.returnA : tick.returnB;
+    final double loserRate = aWins ? tick.returnB : tick.returnA;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF24242D),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text('🏁 대결 종료', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 12),
+                Text('$winner 승리', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF9AD3FF))),
+                const SizedBox(height: 8),
+                Text('승자 수익률 ${winnerRate >= 0 ? '+' : ''}${winnerRate.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                Text('상대 수익률 ${loserRate >= 0 ? '+' : ''}${loserRate.toStringAsFixed(2)}%', style: const TextStyle(color: Color(0xFFA1A1A8))),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('종료'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _onSkip(BattleSeriesData data, BattleSetupState setup) async {
+    ref.read(battlePlaybackControllerProvider.notifier).pause();
+    final bool allowAds = _isMobileRuntime;
+
+    if (allowAds) {
+      try {
+        final InterstitialAd? ad = await AdHelper.loadInterstitial();
+        if (ad != null) {
+          final Completer<void> completer = Completer<void>();
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (InterstitialAd ad) {
+              ad.dispose();
+              completer.complete();
+            },
+            onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+              ad.dispose();
+              completer.complete();
+            },
+          );
+          ad.show();
+          await completer.future;
+        }
+      } catch (_) {}
+    }
+
+    ref.read(battlePlaybackControllerProvider.notifier).skipToEnd();
+    final BattleTick tick = data.tickAt(data.length - 1);
+    ref.read(battleResultProvider.notifier).state = BattleResultState(
+      finalValueA: tick.valueA,
+      finalValueB: tick.valueB,
+      finalReturnA: tick.returnA,
+      finalReturnB: tick.returnB,
+      winner: tick.returnA >= tick.returnB ? 'A' : 'B',
+    );
+    await _showResultDialog(tick: tick, setup: setup);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final BattleSetupState setup = ref.watch(battleSetupProvider);
+    final AsyncValue<BattleSeriesData> dataAsync = ref.watch(battleDataProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Battle Playback')),
+      body: dataAsync.when(
+        data: (BattleSeriesData data) {
+          final BattlePlaybackState playback = ref.watch(battlePlaybackControllerProvider);
+          final BattleTick tick = data.tickAt(playback.index);
+          final bool aLeading = tick.returnA >= tick.returnB;
+          final String leader = aLeading ? 'A' : 'B';
+
+          if (_previousLeader != leader) {
+            _previousLeader = leader;
+            if (!setup.safeMode) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                setState(() => _flash = true);
+                Future<void>.delayed(const Duration(milliseconds: 260), () {
+                  if (mounted) {
+                    setState(() => _flash = false);
+                  }
+                });
+              });
+            }
+          }
+
+          if (playback.status == BattlePlaybackStatus.ended && !_resultDialogShown) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              ref.read(battleResultProvider.notifier).state = BattleResultState(
+                finalValueA: tick.valueA,
+                finalValueB: tick.valueB,
+                finalReturnA: tick.returnA,
+                finalReturnB: tick.returnB,
+                winner: leader,
+              );
+              await _showResultDialog(tick: tick, setup: setup);
+            });
+          }
+
+          final double leadGap = (tick.returnA - tick.returnB).abs();
+          final double gauge = (50 + ((tick.returnA - tick.returnB).clamp(-20, 20) * 2.5)).clamp(0, 100) / 100;
+
+          return Stack(
+            children: <Widget>[
+              if (_flash && !setup.safeMode)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 220),
+                      opacity: _flash ? 0.16 : 0,
+                      child: Container(color: Colors.white),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  children: <Widget>[
+                    _ScoreBoard(
+                      safeMode: setup.safeMode,
+                      nameA: _koreanName(setup.stockA),
+                      tickerA: setup.stockA?.ticker ?? '-',
+                      valueA: tick.valueA,
+                      returnA: tick.returnA,
+                      nameB: _koreanName(setup.stockB),
+                      tickerB: setup.stockB?.ticker ?? '-',
+                      valueB: tick.valueB,
+                      returnB: tick.returnB,
+                      aLeading: aLeading,
+                    ),
+                    const SizedBox(height: 12),
+                    _LeadGauge(gauge: gauge, aLeading: aLeading, gap: leadGap),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: IgnorePointer(
+                        ignoring: setup.safeMode,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: <Color>[Color(0xFF272734), Color(0xFF1D1D25)],
+                            ),
+                          ),
+                          child: Stack(
+                            children: <Widget>[
+                              const Positioned.fill(child: _GridPattern()),
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: BattleChart(seriesA: data.valuesA, seriesB: data.valuesB, playbackIndex: playback.index),
+                              ),
+                              _PlaybackMarker(safeMode: setup.safeMode),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedSwitcher(
+                      duration: setup.safeMode ? Duration.zero : const Duration(milliseconds: 150),
+                      transitionBuilder: (Widget child, Animation<double> animation) {
+                        if (setup.safeMode) return child;
+                        return FadeTransition(opacity: animation, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(animation), child: child));
+                      },
+                      child: Column(
+                        key: ValueKey<int>(tick.ymd),
+                        children: <Widget>[
+                          Text('📅 ${_formatYmd(tick.ymd)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text('Day ${playback.index + 1} / ${data.length}', style: const TextStyle(fontSize: 13, color: Color(0xFFA1A1A8))),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        _PlayPauseButton(
+                          playing: playback.status == BattlePlaybackStatus.running,
+                          safeMode: setup.safeMode,
+                          onPressed: playback.status == BattlePlaybackStatus.running
+                              ? () => ref.read(battlePlaybackControllerProvider.notifier).pause()
+                              : () => ref.read(battlePlaybackControllerProvider.notifier).resume(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SegmentedButton<double>(
+                      segments: const <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 1, label: Text('1x')),
+                        ButtonSegment<double>(value: 2, label: Text('2x')),
+                        ButtonSegment<double>(value: 3, label: Text('3x')),
+                      ],
+                      selected: <double>{playback.speed},
+                      onSelectionChanged: (Set<double> value) => ref.read(battlePlaybackControllerProvider.notifier).setSpeed(value.first),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () => _onSkip(data, setup),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
+                      child: Text(_isMobileRuntime ? '🎬 광고 보고 스킵하기' : '결과 보기'),
+                    ),
+                    if (playback.showCountdown)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text('${playback.countdown}', style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w800)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+      ),
+    );
+  }
+}
+
+class _ScoreBoard extends StatelessWidget {
+  const _ScoreBoard({
+    required this.safeMode,
+    required this.nameA,
+    required this.tickerA,
+    required this.valueA,
+    required this.returnA,
+    required this.nameB,
+    required this.tickerB,
+    required this.valueB,
+    required this.returnB,
+    required this.aLeading,
+  });
+
+  final bool safeMode;
+  final String nameA;
+  final String tickerA;
+  final double valueA;
+  final double returnA;
+  final String nameB;
+  final String tickerB;
+  final double valueB;
+  final double returnB;
+  final bool aLeading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _LeaderCard(
+            label: 'A',
+            name: nameA,
+            ticker: tickerA,
+            value: valueA,
+            rate: returnA,
+            leader: aLeading,
+            safeMode: safeMode,
+            leaderTint: const Color(0x22E54B4B),
+            leaderBorder: const Color(0x77E54B4B),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF5677E7),
+            boxShadow: <BoxShadow>[BoxShadow(color: const Color(0xFF5677E7).withOpacity(0.32), blurRadius: 12)],
+          ),
+          child: const Text('VS', style: TextStyle(fontWeight: FontWeight.w800)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _LeaderCard(
+            label: 'B',
+            name: nameB,
+            ticker: tickerB,
+            value: valueB,
+            rate: returnB,
+            leader: !aLeading,
+            safeMode: safeMode,
+            leaderTint: const Color(0x22266DD3),
+            leaderBorder: const Color(0x77266DD3),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LeaderCard extends StatefulWidget {
+  const _LeaderCard({
+    required this.label,
+    required this.name,
+    required this.ticker,
+    required this.value,
+    required this.rate,
+    required this.leader,
+    required this.safeMode,
+    required this.leaderTint,
+    required this.leaderBorder,
+  });
+
+  final String label;
+  final String name;
+  final String ticker;
+  final double value;
+  final double rate;
+  final bool leader;
+  final bool safeMode;
+  final Color leaderTint;
+  final Color leaderBorder;
+
+  @override
+  State<_LeaderCard> createState() => _LeaderCardState();
+}
+
+class _LeaderCardState extends State<_LeaderCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _flipController;
+  bool _prevLeader = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _prevLeader = widget.leader;
+    _flipController = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+  }
+
+  @override
+  void didUpdateWidget(covariant _LeaderCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_prevLeader && widget.leader && !widget.safeMode) {
+      _flipController.forward(from: 0);
+    }
+    _prevLeader = widget.leader;
+  }
+
+  @override
+  void dispose() {
+    _flipController.dispose();
+    super.dispose();
+  }
+
+  String _fmt(double value) => NumberFormat('#,###').format(value.round());
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _flipController,
+      builder: (_, __) {
+        final double t = _flipController.value;
+        final double angle = t * pi;
+        final bool sparkle = t > 0 && t < 0.65;
+
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()..setEntry(3, 2, 0.0015)..rotateY(angle),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 220),
+            opacity: widget.leader ? 1 : 0.85,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: widget.leader ? widget.leaderTint : const Color(0xFF2A2A33),
+                border: Border.all(color: widget.leader ? widget.leaderBorder : Colors.transparent),
+                boxShadow: widget.leader
+                    ? <BoxShadow>[
+                        BoxShadow(color: widget.leaderBorder.withOpacity(0.35), blurRadius: 16, spreadRadius: 1),
+                        if (sparkle) BoxShadow(color: Colors.white.withOpacity(0.55), blurRadius: 20, spreadRadius: 2),
+                      ]
+                    : <BoxShadow>[],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text('${widget.label} · ${widget.ticker}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+                  const SizedBox(height: 4),
+                  Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 8),
+                  Text('₩ ${_fmt(widget.value)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text('${widget.rate >= 0 ? '+' : ''}${widget.rate.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _GridPattern extends StatelessWidget {
+  const _GridPattern();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _GridPainter());
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 36) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += 28) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PlaybackMarker extends StatelessWidget {
+  const _PlaybackMarker({required this.safeMode});
+
+  final bool safeMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (_, BoxConstraints constraints) {
+        final double centerX = constraints.maxWidth / 2;
+        return Stack(
+          children: <Widget>[
+            Positioned(
+              left: centerX,
+              top: 8,
+              bottom: 8,
+              child: Container(width: 1, color: const Color(0x99FFFFFF)),
+            ),
+            Positioned(
+              left: max(0, centerX - 6),
+              top: 8,
+              child: _PulseDot(enabled: !safeMode),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PulseDot extends StatefulWidget {
+  const _PulseDot({required this.enabled});
+
+  final bool enabled;
+
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    if (widget.enabled) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulseDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+    if (!widget.enabled) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final double scale = 1 + (_controller.value * 0.35);
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: <BoxShadow>[BoxShadow(color: Colors.white.withOpacity(0.6), blurRadius: 12)],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LeadGauge extends StatelessWidget {
+  const _LeadGauge({required this.gauge, required this.aLeading, required this.gap});
+
+  final double gauge;
+  final bool aLeading;
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        Container(
+          height: 8,
+          decoration: BoxDecoration(color: const Color(0xFF2A2A33), borderRadius: BorderRadius.circular(99)),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: gauge,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: aLeading ? const Color(0xFFE54B4B) : const Color(0xFF266DD3),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('승부 게이지 · 격차 ${gap.toStringAsFixed(2)}%p', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+      ],
+    );
+  }
+}
+
+class _PlayPauseButton extends StatelessWidget {
+  const _PlayPauseButton({required this.playing, required this.safeMode, required this.onPressed});
+
+  final bool playing;
+  final bool safeMode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(colors: <Color>[Color(0xFF5677E7), Color(0xFF7593F5)]),
+        boxShadow: <BoxShadow>[
+          BoxShadow(color: const Color(0xFF5677E7).withOpacity(playing && !safeMode ? 0.5 : 0.25), blurRadius: 16, spreadRadius: 1),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 32, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
