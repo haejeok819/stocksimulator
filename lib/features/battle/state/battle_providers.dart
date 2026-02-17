@@ -92,6 +92,10 @@ class BattleSeriesData {
     required this.sharesB,
     required this.valuesA,
     required this.valuesB,
+    required this.returnsA,
+    required this.returnsB,
+    required this.tradingDaysAInRange,
+    required this.tradingDaysBInRange,
   });
 
   final NormalizedBattleSeries normalized;
@@ -100,8 +104,20 @@ class BattleSeriesData {
   final double sharesB;
   final List<double> valuesA;
   final List<double> valuesB;
+  final List<double> returnsA;
+  final List<double> returnsB;
+  final int tradingDaysAInRange;
+  final int tradingDaysBInRange;
 
   int get length => normalized.dates.length;
+
+  double get coverageRatio {
+    final int denominator = tradingDaysAInRange > tradingDaysBInRange ? tradingDaysAInRange : tradingDaysBInRange;
+    if (denominator <= 0) return 0;
+    return length / denominator;
+  }
+
+  bool get shouldShowCoverageNotice => coverageRatio < 0.70;
 
   BattleTick tickAt(int index) {
     final int safe = index.clamp(0, length - 1);
@@ -111,8 +127,8 @@ class BattleSeriesData {
       ymd: normalized.dates[safe],
       valueA: valueA,
       valueB: valueB,
-      returnA: ((valueA - amount) / amount) * 100,
-      returnB: ((valueB - amount) / amount) * 100,
+      returnA: returnsA[safe],
+      returnB: returnsB[safe],
     );
   }
 }
@@ -154,8 +170,8 @@ final FutureProvider.autoDispose<BattleSeriesData> battleDataProvider = FuturePr
   );
 
   final NormalizedBattleSeries normalized = normalizeBattleSeries(aSeries: aSeries, bSeries: bSeries);
-  if (normalized.dates.length < 30) {
-    throw StateError('교집합 거래일이 부족합니다(최소 30일).');
+  if (normalized.dates.isEmpty) {
+    throw StateError('공통 거래일이 없어 비교할 수 없습니다.');
   }
 
   final double amount = setup.investAmount.toDouble();
@@ -164,6 +180,8 @@ final FutureProvider.autoDispose<BattleSeriesData> battleDataProvider = FuturePr
 
   final List<double> valuesA = normalized.closeA.map((double close) => sharesA * close).toList(growable: false);
   final List<double> valuesB = normalized.closeB.map((double close) => sharesB * close).toList(growable: false);
+  final List<double> returnsA = normalized.closeA.map((double close) => ((close / normalized.closeA.first) - 1) * 100).toList(growable: false);
+  final List<double> returnsB = normalized.closeB.map((double close) => ((close / normalized.closeB.first) - 1) * 100).toList(growable: false);
 
   return BattleSeriesData(
     normalized: normalized,
@@ -172,6 +190,10 @@ final FutureProvider.autoDispose<BattleSeriesData> battleDataProvider = FuturePr
     sharesB: sharesB,
     valuesA: valuesA,
     valuesB: valuesB,
+    returnsA: returnsA,
+    returnsB: returnsB,
+    tradingDaysAInRange: aSeries.length,
+    tradingDaysBInRange: bSeries.length,
   );
 });
 

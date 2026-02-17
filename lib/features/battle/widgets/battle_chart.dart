@@ -1,114 +1,174 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleChart extends StatelessWidget {
   const BattleChart({
     super.key,
     required this.seriesA,
     required this.seriesB,
+    required this.dates,
     required this.playbackIndex,
-    this.windowSize = 30,
   });
 
   final List<double> seriesA;
   final List<double> seriesB;
+  final List<int> dates;
   final int playbackIndex;
-  final int windowSize;
 
   @override
   Widget build(BuildContext context) {
-    if (seriesA.isEmpty || seriesB.isEmpty) {
+    if (seriesA.isEmpty || seriesB.isEmpty || dates.isEmpty) {
       return const SizedBox.shrink();
     }
 
     final int safeIndex = playbackIndex.clamp(0, seriesA.length - 1);
-    final int center = windowSize ~/ 2;
 
-    final List<double?> visibleA = List<double?>.filled(windowSize, null, growable: false);
-    final List<double?> visibleB = List<double?>.filled(windowSize, null, growable: false);
-
-    for (int i = 0; i < windowSize; i++) {
-      final int sourceIndex = safeIndex - center + i;
-      if (sourceIndex < 0 || sourceIndex >= seriesA.length) {
-        continue;
-      }
-      visibleA[i] = seriesA[sourceIndex];
-      visibleB[i] = seriesB[sourceIndex];
-    }
+    double minY = min(seriesA.reduce(min), seriesB.reduce(min));
+    double maxY = max(seriesA.reduce(max), seriesB.reduce(max));
+    final double rawRange = maxY - minY;
+    final double pad = rawRange < 0.1 ? 1.0 : max(rawRange * 0.08, 0.5);
+    minY -= pad;
+    maxY += pad;
 
     return CustomPaint(
       size: Size.infinite,
-      painter: _BattleChartPainter(seriesA: visibleA, seriesB: visibleB),
+      painter: _BattleChartPainter(
+        seriesA: seriesA,
+        seriesB: seriesB,
+        dates: dates,
+        currentIndex: safeIndex,
+        minY: minY,
+        maxY: maxY,
+      ),
     );
   }
 }
 
 class _BattleChartPainter extends CustomPainter {
-  _BattleChartPainter({required this.seriesA, required this.seriesB});
+  _BattleChartPainter({
+    required this.seriesA,
+    required this.seriesB,
+    required this.dates,
+    required this.currentIndex,
+    required this.minY,
+    required this.maxY,
+  });
 
-  final List<double?> seriesA;
-  final List<double?> seriesB;
+  final List<double> seriesA;
+  final List<double> seriesB;
+  final List<int> dates;
+  final int currentIndex;
+  final double minY;
+  final double maxY;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final List<double> values = <double>[
-      ...seriesA.whereType<double>(),
-      ...seriesB.whereType<double>(),
-    ];
-    if (values.isEmpty) return;
+    final int length = min(seriesA.length, seriesB.length);
+    if (length < 2) return;
 
-    final double minValue = values.reduce(min);
-    final double maxValue = values.reduce(max);
-    final double range = (maxValue - minValue).abs() < 1 ? 1 : (maxValue - minValue);
+    const double yAxisWidth = 64;
+    const double xAxisHeight = 24;
+    final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
 
-    Offset toPoint(int i, double value) {
-      final double x = seriesA.length <= 1 ? 0 : i * (size.width / (seriesA.length - 1));
-      final double y = size.height - ((value - minValue) / range) * size.height;
+    final Paint gridPaint = Paint()..color = Colors.white.withOpacity(0.18)..strokeWidth = 1;
+    const int yTickCount = 5;
+    for (int i = 0; i < yTickCount; i++) {
+      final double ratio = i / (yTickCount - 1);
+      final double y = chartRect.top + ratio * chartRect.height;
+      final double value = maxY - ratio * (maxY - minY);
+      canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint);
+      final TextPainter tp = TextPainter(
+        text: TextSpan(
+          text: AppNumberFormat.formatPercent(value, decimals: 1, signed: true),
+          style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 11),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: yAxisWidth - 8);
+      tp.paint(canvas, Offset(chartRect.right + 8, y - tp.height / 2));
+    }
+
+    final double range = max(maxY - minY, 0.0001);
+    final double stepX = chartRect.width / (length - 1);
+
+    Offset pointFor(int i, double v) {
+      final double x = chartRect.left + (stepX * i);
+      final double y = chartRect.bottom - ((v - minY) / range) * chartRect.height;
       return Offset(x, y);
     }
 
-    Path buildPath(List<double?> values) {
-      final Path path = Path();
-      bool drawing = false;
+    final Paint aPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = const Color(0xFFE54B4B);
 
-      for (int i = 0; i < values.length; i++) {
-        final double? value = values[i];
-        if (value == null) {
-          drawing = false;
-          continue;
-        }
+    final Paint bPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..color = const Color(0xFF266DD3);
 
-        final Offset point = toPoint(i, value);
-        if (!drawing) {
-          path.moveTo(point.dx, point.dy);
-          drawing = true;
-        } else {
-          path.lineTo(point.dx, point.dy);
-        }
+    final Path aPath = Path();
+    final Path bPath = Path();
+
+    for (int i = 0; i <= currentIndex; i++) {
+      final Offset pa = pointFor(i, seriesA[i]);
+      final Offset pb = pointFor(i, seriesB[i]);
+      if (i == 0) {
+        aPath.moveTo(pa.dx, pa.dy);
+        bPath.moveTo(pb.dx, pb.dy);
+      } else {
+        aPath.lineTo(pa.dx, pa.dy);
+        bPath.lineTo(pb.dx, pb.dy);
       }
-      return path;
     }
 
-    canvas.drawPath(
-      buildPath(seriesA),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = const Color(0xFF266DD3),
-    );
+    canvas.drawPath(aPath, aPaint);
+    canvas.drawPath(bPath, bPaint);
 
-    canvas.drawPath(
-      buildPath(seriesB),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = const Color(0xFFE54B4B),
-    );
+    final Offset endA = pointFor(currentIndex, seriesA[currentIndex]);
+    final Offset endB = pointFor(currentIndex, seriesB[currentIndex]);
+    canvas.drawCircle(endA, 4, Paint()..color = const Color(0xFFE54B4B));
+    canvas.drawCircle(endB, 4, Paint()..color = const Color(0xFF266DD3));
+
+    _drawXLabels(canvas, chartRect, stepX, length);
+  }
+
+  void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int length) {
+    final int labelCount = 7;
+    final Set<int> indices = <int>{0, length - 1};
+    for (int i = 1; i < labelCount - 1; i++) {
+      final int index = ((length - 1) * (i / (labelCount - 1))).round();
+      indices.add(index.clamp(0, length - 1));
+    }
+
+    for (final int index in indices.toList()..sort()) {
+      final double x = chartRect.left + index * stepX;
+      final String label = _formatYmd(dates[index]);
+      final TextPainter tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 10),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final double drawX = (x - tp.width / 2).clamp(chartRect.left, chartRect.right - tp.width);
+      tp.paint(canvas, Offset(drawX, chartRect.bottom + 6));
+    }
+  }
+
+  String _formatYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
   @override
   bool shouldRepaint(covariant _BattleChartPainter oldDelegate) {
-    return oldDelegate.seriesA != seriesA || oldDelegate.seriesB != seriesB;
+    return oldDelegate.seriesA != seriesA ||
+        oldDelegate.seriesB != seriesB ||
+        oldDelegate.currentIndex != currentIndex ||
+        oldDelegate.minY != minY ||
+        oldDelegate.maxY != maxY ||
+        oldDelegate.dates != dates;
   }
 }

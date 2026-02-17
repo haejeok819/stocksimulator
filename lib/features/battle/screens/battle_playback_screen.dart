@@ -210,6 +210,21 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     const SizedBox(height: 12),
                     _LeadGauge(gauge: gauge, aLeading: aLeading, gap: leadGap),
                     const SizedBox(height: 12),
+                    if (data.shouldShowCoverageNotice)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2A2A33),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0x553A3A42)),
+                        ),
+                        child: Text(
+                          '공통 거래일 구간으로 비교합니다 (${_formatYmd(data.normalized.dates.first)} ~ ${_formatYmd(data.normalized.dates.last)})',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                        ),
+                      ),
                     Expanded(
                       child: IgnorePointer(
                         ignoring: setup.safeMode,
@@ -227,9 +242,13 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                               const Positioned.fill(child: _GridPattern()),
                               Padding(
                                 padding: const EdgeInsets.all(12),
-                                child: BattleChart(seriesA: data.valuesA, seriesB: data.valuesB, playbackIndex: playback.index),
+                                child: BattleChart(
+                                  seriesA: data.returnsA,
+                                  seriesB: data.returnsB,
+                                  dates: data.normalized.dates,
+                                  playbackIndex: playback.index,
+                                ),
                               ),
-                              _PlaybackMarker(safeMode: setup.safeMode),
                             ],
                           ),
                         ),
@@ -497,98 +516,6 @@ class _GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PlaybackMarker extends StatelessWidget {
-  const _PlaybackMarker({required this.safeMode});
-
-  final bool safeMode;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (_, BoxConstraints constraints) {
-        final double centerX = constraints.maxWidth / 2;
-        return Stack(
-          children: <Widget>[
-            Positioned(
-              left: centerX,
-              top: 8,
-              bottom: 8,
-              child: Container(width: 1, color: const Color(0x99FFFFFF)),
-            ),
-            Positioned(
-              left: max(0, centerX - 6),
-              top: 8,
-              child: _PulseDot(enabled: !safeMode),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _PulseDot extends StatefulWidget {
-  const _PulseDot({required this.enabled});
-
-  final bool enabled;
-
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
-
-class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    if (widget.enabled) {
-      _controller.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _PulseDot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.enabled && !_controller.isAnimating) {
-      _controller.repeat(reverse: true);
-    }
-    if (!widget.enabled) {
-      _controller.stop();
-      _controller.value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) {
-        final double scale = 1 + (_controller.value * 0.35);
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: <BoxShadow>[BoxShadow(color: Colors.white.withOpacity(0.6), blurRadius: 12)],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _LeadGauge extends StatelessWidget {
