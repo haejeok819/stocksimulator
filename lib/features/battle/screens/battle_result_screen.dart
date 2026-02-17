@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 
 class BattleResultScreen extends ConsumerWidget {
@@ -30,9 +31,9 @@ class BattleResultScreen extends ConsumerWidget {
                 children: <Widget>[
                   Text('🏆 ${result.winner} 승리', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
-                  _resultRow('A', setup.stockA?.ticker ?? '-', result.finalValueA, result.finalReturnA),
+                  _resultRow('A', _koreanName(setup.stockA), result.finalValueA, result.finalReturnA),
                   const SizedBox(height: 8),
-                  _resultRow('B', setup.stockB?.ticker ?? '-', result.finalValueB, result.finalReturnB),
+                  _resultRow('B', _koreanName(setup.stockB), result.finalValueB, result.finalReturnB),
                 ],
               ),
             ),
@@ -60,6 +61,12 @@ class BattleResultScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String _koreanName(StockModel? stock) {
+    if (stock == null) return '-';
+    if (stock.nameKo.trim().isNotEmpty) return stock.nameKo.trim();
+    return stock.displayName;
   }
 
   Widget _resultRow(String label, String ticker, double finalValue, double finalRate) {
