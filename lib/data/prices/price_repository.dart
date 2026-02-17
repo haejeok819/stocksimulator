@@ -76,12 +76,13 @@ class PriceRepository {
     }
 
     final AssetManifest manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final Set<String> assetKeys = manifest.listAssets().toSet();
     final List<int> loadedYears = <int>[];
     final List<PricePoint> merged = <PricePoint>[];
 
     for (int year = start.year; year <= end.year; year++) {
       final String assetPath = _assetIndex.flatYearAssetPath(market: market, ticker: ticker, year: year);
-      if (!manifest.containsKey(assetPath)) {
+      if (!assetKeys.contains(assetPath)) {
         debugPrint(
           '[PriceRepository] missing yearly asset. market=$market, ticker=$ticker, year=$year, path=$assetPath',
         );
