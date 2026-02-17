@@ -53,6 +53,14 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     });
   }
 
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
   @override
   void dispose() {
     _placeholderTimer?.cancel();
@@ -96,24 +104,36 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
               children: <Widget>[
                 _HeroSection(market: _market),
                 const SizedBox(height: 14),
-                _MarketToggle(market: _market, onChanged: _setMarket),
-                const SizedBox(height: 12),
-                _PremiumSearchBar(
-                  controller: _searchController,
-                  query: _query,
-                  safeMode: _safeMode,
-                  placeholder: _placeholders[_placeholderIndex],
-                  onChanged: (String value) {
-                    setState(() {
-                      _query = value;
-                    });
-                  },
-                  onClear: () {
-                    _searchController.clear();
-                    setState(() {
-                      _query = '';
-                    });
-                  },
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E28),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0x10FFFFFF)),
+                  ),
+                  child: Column(
+                    children: <Widget>[
+                      _MarketToggle(market: _market, onChanged: _setMarket),
+                      const SizedBox(height: 10),
+                      _PremiumSearchBar(
+                        controller: _searchController,
+                        query: _query,
+                        safeMode: _safeMode,
+                        placeholders: _placeholders,
+                        onChanged: (String value) {
+                          setState(() {
+                            _query = value;
+                          });
+                        },
+                        onClear: () {
+                          _searchController.clear();
+                          setState(() {
+                            _query = '';
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Expanded(
@@ -277,7 +297,7 @@ class _PremiumSearchBar extends StatefulWidget {
     required this.controller,
     required this.query,
     required this.safeMode,
-    required this.placeholder,
+    required this.placeholders,
     required this.onChanged,
     required this.onClear,
   });
@@ -285,7 +305,7 @@ class _PremiumSearchBar extends StatefulWidget {
   final TextEditingController controller;
   final String query;
   final bool safeMode;
-  final String placeholder;
+  final List<String> placeholders;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
 
@@ -295,9 +315,31 @@ class _PremiumSearchBar extends StatefulWidget {
 
 class _PremiumSearchBarState extends State<_PremiumSearchBar> {
   final FocusNode _focusNode = FocusNode();
+  Timer? _placeholderTimer;
+  int _phIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _placeholderTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || widget.query.isNotEmpty || widget.placeholders.isEmpty) return;
+      setState(() {
+        _phIndex = (_phIndex + 1) % widget.placeholders.length;
+      });
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PremiumSearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query.isNotEmpty && _phIndex != 0) {
+      setState(() => _phIndex = 0);
+    }
+  }
 
   @override
   void dispose() {
+    _placeholderTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -305,6 +347,7 @@ class _PremiumSearchBarState extends State<_PremiumSearchBar> {
   @override
   Widget build(BuildContext context) {
     final bool focused = _focusNode.hasFocus;
+    final String placeholder = widget.placeholders.isEmpty ? '' : widget.placeholders[_phIndex % widget.placeholders.length];
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -323,28 +366,26 @@ class _PremiumSearchBarState extends State<_PremiumSearchBar> {
           Icon(Icons.search, color: Colors.white.withOpacity(0.7)),
           const SizedBox(width: 8),
           Expanded(
-            child: Stack(
-              alignment: Alignment.centerLeft,
-              children: <Widget>[
-                if (widget.query.isEmpty)
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 150),
-                    child: Text(
-                      widget.placeholder,
-                      key: ValueKey<String>(widget.placeholder),
-                      style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                TextField(
-                  controller: widget.controller,
-                  focusNode: _focusNode,
-                  onChanged: widget.onChanged,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration.collapsed(hintText: ''),
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              onChanged: widget.onChanged,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+              ),
+              cursorColor: const Color(0xFF5677E7),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: placeholder,
+                hintStyle: const TextStyle(
+                  color: Color(0xFFA1A1A8),
+                  fontSize: 13,
                 ),
-              ],
+              ),
             ),
           ),
           AnimatedSwitcher(
@@ -408,8 +449,14 @@ class _PremiumStockCardState extends State<_PremiumStockCard> {
         decoration: BoxDecoration(
           color: const Color(0xFF24242F),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0x1AFFFFFF)),
-          boxShadow: <BoxShadow>[BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 6))],
+          border: Border.all(color: const Color(0x0FFFFFFF)),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: <Widget>[
