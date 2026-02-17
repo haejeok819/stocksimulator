@@ -585,15 +585,10 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
               child: Container(
                 decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
                 padding: const EdgeInsets.all(10),
-                child: ValueListenableBuilder<int>(
-                  valueListenable: _progressIndex,
-                  builder: (_, int progress, __) {
-                    return BattleLineChart(
-                      seriesA: _seriesA,
-                      seriesB: _seriesB,
-                      progress: progress,
-                    );
-                  },
+                child: BattleLineChart(
+                  seriesA: _seriesA,
+                  seriesB: _seriesB,
+                  progressListenable: _progressIndex,
                 ),
               ),
             ),

@@ -5,28 +5,36 @@ class BattleLineChart extends StatelessWidget {
     super.key,
     required this.seriesA,
     required this.seriesB,
-    required this.progress,
+    required this.progressListenable,
   });
 
   final List<double> seriesA;
   final List<double> seriesB;
-  final int progress;
+  final ValueListenable<int> progressListenable;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _BattleLineChartPainter(seriesA: seriesA, seriesB: seriesB, progress: progress),
+      painter: _BattleLineChartPainter(
+        seriesA: seriesA,
+        seriesB: seriesB,
+        progressListenable: progressListenable,
+      ),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _BattleLineChartPainter extends CustomPainter {
-  _BattleLineChartPainter({required this.seriesA, required this.seriesB, required this.progress});
+  _BattleLineChartPainter({
+    required this.seriesA,
+    required this.seriesB,
+    required this.progressListenable,
+  }) : super(repaint: progressListenable);
 
   final List<double> seriesA;
   final List<double> seriesB;
-  final int progress;
+  final ValueListenable<int> progressListenable;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -34,7 +42,7 @@ class _BattleLineChartPainter extends CustomPainter {
       return;
     }
 
-    final int end = progress.clamp(0, seriesA.length - 1);
+    final int end = progressListenable.value.clamp(0, seriesA.length - 1);
     final Iterable<double> visibleA = seriesA.take(end + 1);
     final Iterable<double> visibleB = seriesB.take(end + 1);
     final double minValue = [...visibleA, ...visibleB].reduce((double a, double b) => a < b ? a : b);
@@ -78,6 +86,6 @@ class _BattleLineChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BattleLineChartPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.seriesA != seriesA || oldDelegate.seriesB != seriesB;
+    return oldDelegate.seriesA != seriesA || oldDelegate.seriesB != seriesB;
   }
 }
