@@ -99,7 +99,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
 
   Future<void> _onSkip(BattleSeriesData data, BattleSetupState setup) async {
     ref.read(battlePlaybackControllerProvider.notifier).pause();
-    final bool allowAds = _isMobileRuntime && !setup.safeMode;
+    final bool allowAds = _isMobileRuntime;
 
     if (allowAds) {
       try {
@@ -229,7 +229,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                                 padding: const EdgeInsets.all(12),
                                 child: BattleChart(seriesA: data.valuesA, seriesB: data.valuesB, playbackIndex: playback.index),
                               ),
-                              _PlaybackMarker(playbackIndex: playback.index, total: data.length, safeMode: setup.safeMode),
+                              _PlaybackMarker(safeMode: setup.safeMode),
                             ],
                           ),
                         ),
@@ -278,7 +278,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     OutlinedButton(
                       onPressed: () => _onSkip(data, setup),
                       style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-                      child: const Text('스킵 → 결과'),
+                      child: Text(_isMobileRuntime ? '🎬 광고 보고 스킵하기' : '결과 보기'),
                     ),
                     if (playback.showCountdown)
                       Padding(
@@ -500,28 +500,25 @@ class _GridPainter extends CustomPainter {
 }
 
 class _PlaybackMarker extends StatelessWidget {
-  const _PlaybackMarker({required this.playbackIndex, required this.total, required this.safeMode});
+  const _PlaybackMarker({required this.safeMode});
 
-  final int playbackIndex;
-  final int total;
   final bool safeMode;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (_, BoxConstraints constraints) {
-        final double ratio = total <= 1 ? 0 : playbackIndex / (total - 1);
-        final double x = ratio * constraints.maxWidth;
+        final double centerX = constraints.maxWidth / 2;
         return Stack(
           children: <Widget>[
             Positioned(
-              left: x,
+              left: centerX,
               top: 8,
               bottom: 8,
-              child: Container(width: 1, color: const Color(0x66FFFFFF)),
+              child: Container(width: 1, color: const Color(0x99FFFFFF)),
             ),
             Positioned(
-              left: max(0, x - 6),
+              left: max(0, centerX - 6),
               top: 8,
               child: _PulseDot(enabled: !safeMode),
             ),

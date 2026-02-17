@@ -18,10 +18,24 @@ class BattleChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int safeIndex = seriesA.isEmpty ? 0 : playbackIndex.clamp(0, seriesA.length - 1);
-    final int start = max(0, safeIndex - (windowSize - 1));
-    final List<double> visibleA = seriesA.sublist(start, safeIndex + 1);
-    final List<double> visibleB = seriesB.sublist(start, safeIndex + 1);
+    if (seriesA.isEmpty || seriesB.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final int safeIndex = playbackIndex.clamp(0, seriesA.length - 1);
+    final int center = windowSize ~/ 2;
+
+    final List<double?> visibleA = List<double?>.filled(windowSize, null, growable: false);
+    final List<double?> visibleB = List<double?>.filled(windowSize, null, growable: false);
+
+    for (int i = 0; i < windowSize; i++) {
+      final int sourceIndex = safeIndex - center + i;
+      if (sourceIndex < 0 || sourceIndex >= seriesA.length) {
+        continue;
+      }
+      visibleA[i] = seriesA[sourceIndex];
+      visibleB[i] = seriesB[sourceIndex];
+    }
 
     return CustomPaint(
       size: Size.infinite,
@@ -33,29 +47,42 @@ class BattleChart extends StatelessWidget {
 class _BattleChartPainter extends CustomPainter {
   _BattleChartPainter({required this.seriesA, required this.seriesB});
 
-  final List<double> seriesA;
-  final List<double> seriesB;
+  final List<double?> seriesA;
+  final List<double?> seriesB;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (seriesA.isEmpty || seriesB.isEmpty) return;
+    final List<double> values = <double>[
+      ...seriesA.whereType<double>(),
+      ...seriesB.whereType<double>(),
+    ];
+    if (values.isEmpty) return;
 
-    final double minValue = [...seriesA, ...seriesB].reduce(min);
-    final double maxValue = [...seriesA, ...seriesB].reduce(max);
+    final double minValue = values.reduce(min);
+    final double maxValue = values.reduce(max);
     final double range = (maxValue - minValue).abs() < 1 ? 1 : (maxValue - minValue);
 
-    Offset toPoint(int i, double value, int length) {
-      final double x = length <= 1 ? 0 : i * (size.width / (length - 1));
+    Offset toPoint(int i, double value) {
+      final double x = seriesA.length <= 1 ? 0 : i * (size.width / (seriesA.length - 1));
       final double y = size.height - ((value - minValue) / range) * size.height;
       return Offset(x, y);
     }
 
-    Path buildPath(List<double> values) {
+    Path buildPath(List<double?> values) {
       final Path path = Path();
+      bool drawing = false;
+
       for (int i = 0; i < values.length; i++) {
-        final Offset point = toPoint(i, values[i], values.length);
-        if (i == 0) {
+        final double? value = values[i];
+        if (value == null) {
+          drawing = false;
+          continue;
+        }
+
+        final Offset point = toPoint(i, value);
+        if (!drawing) {
           path.moveTo(point.dx, point.dy);
+          drawing = true;
         } else {
           path.lineTo(point.dx, point.dy);
         }
@@ -68,7 +95,7 @@ class _BattleChartPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
-        ..color = const Color(0xFF5677E7),
+        ..color = const Color(0xFF266DD3),
     );
 
     canvas.drawPath(
@@ -76,7 +103,7 @@ class _BattleChartPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
-        ..color = const Color(0xFFF59E0B),
+        ..color = const Color(0xFFE54B4B),
     );
   }
 
