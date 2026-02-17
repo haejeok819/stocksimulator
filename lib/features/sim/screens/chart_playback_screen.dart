@@ -188,11 +188,11 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   }
 
 
-  double _returnPercentAt(int index) {
-    if (widget.points.isEmpty) return 0;
-    final double basePrice = widget.points.first.close <= 0 ? 1 : widget.points.first.close;
-    final int safe = index.clamp(0, widget.points.length - 1);
-    return ((widget.points[safe].close / basePrice) - 1) * 100;
+  String _formatPriceByMarket(double price, String marketCode) {
+    if (marketCode == 'US') {
+      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
+    }
+    return '${AppNumberFormat.formatInt(price)}원';
   }
 
   String _formatYmd(int ymd) {
@@ -204,8 +204,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   Widget build(BuildContext context) {
     final bool hasData = widget.points.isNotEmpty;
     final SimulationPoint current = hasData ? widget.points[_index] : const SimulationPoint(ymd: 0, close: 0, value: 0);
-    final double currentReturn = hasData ? _returnPercentAt(_index) : 0;
-    final double endReturn = hasData ? _returnPercentAt(widget.points.length - 1) : 0;
+    final String marketCode = widget.flowState.marketCode;
 
     return Scaffold(
       appBar: AppBar(title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생', style: PlaybackDesignTokens.title)),
@@ -218,13 +217,13 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
             children: <Widget>[
               Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 4),
-              Text(AppNumberFormat.formatPercent(currentReturn, decimals: 1, signed: true), style: PlaybackDesignTokens.headlineNumber),
+              Text(_formatPriceByMarket(current.close, marketCode), style: PlaybackDesignTokens.headlineNumber),
               const SizedBox(height: 2),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text('시작 +0.0%', style: PlaybackDesignTokens.secondary),
-                  Text('종료 ${AppNumberFormat.formatPercent(endReturn, decimals: 1, signed: true)}', style: PlaybackDesignTokens.secondary),
+                  Text('시작 ${_formatPriceByMarket(widget.points.first.close, marketCode)}', style: PlaybackDesignTokens.secondary),
+                  Text('종료 ${_formatPriceByMarket(widget.points.last.close, marketCode)}', style: PlaybackDesignTokens.secondary),
                 ],
               ),
               const SizedBox(height: 12),
@@ -243,6 +242,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                               points: widget.points,
                               currentIndex: _index,
                               pulse: motionOn ? (sin(_pulseTime) + 1) / 2 : 0,
+                              marketCode: marketCode,
                             );
                           },
                         ),
@@ -272,7 +272,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
               ),
               const SizedBox(height: 10),
-              Text('전체 기간 수익률(%) 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+              Text('전체 기간 주가 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
               if (_showSkip)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

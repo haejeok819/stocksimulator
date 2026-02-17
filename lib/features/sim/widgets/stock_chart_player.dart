@@ -11,11 +11,13 @@ class StockChartPlayer extends StatelessWidget {
     required this.points,
     required this.currentIndex,
     required this.pulse,
+    required this.marketCode,
   });
 
   final List<SimulationPoint> points;
   final int currentIndex;
   final double pulse;
+  final String marketCode;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +49,8 @@ class StockChartPlayer extends StatelessWidget {
             minY: minY,
             maxY: maxY,
             pulse: pulse,
+            basePrice: basePrice,
+            marketCode: marketCode,
           ),
         );
       },
@@ -62,6 +66,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.minY,
     required this.maxY,
     required this.pulse,
+    required this.basePrice,
+    required this.marketCode,
   });
 
   final List<SimulationPoint> points;
@@ -70,6 +76,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final double minY;
   final double maxY;
   final double pulse;
+  final double basePrice;
+  final String marketCode;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -92,7 +100,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
       final TextPainter tp = TextPainter(
         text: TextSpan(
-          text: AppNumberFormat.formatPercent(value, decimals: 1, signed: true),
+          text: _formatPriceLabel(value),
           style: const TextStyle(color: AppColors.helperText, fontSize: 11),
         ),
         textDirection: TextDirection.ltr,
@@ -161,6 +169,14 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     }
   }
 
+  String _formatPriceLabel(double percent) {
+    final double price = basePrice * (1 + percent / 100);
+    if (marketCode == 'US') {
+      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
+    }
+    return '${AppNumberFormat.formatInt(price)}원';
+  }
+
   String _formatCompactYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
@@ -172,6 +188,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
         oldDelegate.currentIndex != currentIndex ||
         oldDelegate.pulse != pulse ||
         oldDelegate.minY != minY ||
-        oldDelegate.maxY != maxY;
+        oldDelegate.maxY != maxY ||
+        oldDelegate.basePrice != basePrice ||
+        oldDelegate.marketCode != marketCode;
   }
 }

@@ -10,12 +10,20 @@ class BattleChart extends StatelessWidget {
     required this.seriesB,
     required this.dates,
     required this.playbackIndex,
+    required this.basePriceA,
+    required this.basePriceB,
+    required this.marketCodeA,
+    required this.marketCodeB,
   });
 
   final List<double> seriesA;
   final List<double> seriesB;
   final List<int> dates;
   final int playbackIndex;
+  final double basePriceA;
+  final double basePriceB;
+  final String marketCodeA;
+  final String marketCodeB;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +54,10 @@ class BattleChart extends StatelessWidget {
         currentIndex: safeIndex,
         minY: minY,
         maxY: maxY,
+        basePriceA: basePriceA,
+        basePriceB: basePriceB,
+        marketCodeA: marketCodeA,
+        marketCodeB: marketCodeB,
       ),
     );
   }
@@ -59,6 +71,10 @@ class _BattleChartPainter extends CustomPainter {
     required this.currentIndex,
     required this.minY,
     required this.maxY,
+    required this.basePriceA,
+    required this.basePriceB,
+    required this.marketCodeA,
+    required this.marketCodeB,
   });
 
   final List<double> seriesA;
@@ -67,6 +83,10 @@ class _BattleChartPainter extends CustomPainter {
   final int currentIndex;
   final double minY;
   final double maxY;
+  final double basePriceA;
+  final double basePriceB;
+  final String marketCodeA;
+  final String marketCodeB;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -86,7 +106,7 @@ class _BattleChartPainter extends CustomPainter {
       canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint);
       final TextPainter tp = TextPainter(
         text: TextSpan(
-          text: AppNumberFormat.formatPercent(value, decimals: 1, signed: true),
+          text: _formatAxisLabel(value),
           style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 11),
         ),
         textDirection: TextDirection.ltr,
@@ -162,6 +182,19 @@ class _BattleChartPainter extends CustomPainter {
     }
   }
 
+  String _formatAxisLabel(double percent) {
+    final double priceA = basePriceA * (1 + percent / 100);
+    final double priceB = basePriceB * (1 + percent / 100);
+    return '${_formatPrice(priceA, marketCodeA)} / ${_formatPrice(priceB, marketCodeB)}';
+  }
+
+  String _formatPrice(double price, String marketCode) {
+    if (marketCode == 'US') {
+      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
+    }
+    return '${AppNumberFormat.formatInt(price)}원';
+  }
+
   String _formatYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
@@ -174,6 +207,10 @@ class _BattleChartPainter extends CustomPainter {
         oldDelegate.currentIndex != currentIndex ||
         oldDelegate.minY != minY ||
         oldDelegate.maxY != maxY ||
-        oldDelegate.dates != dates;
+        oldDelegate.dates != dates ||
+        oldDelegate.basePriceA != basePriceA ||
+        oldDelegate.basePriceB != basePriceB ||
+        oldDelegate.marketCodeA != marketCodeA ||
+        oldDelegate.marketCodeB != marketCodeB;
   }
 }
