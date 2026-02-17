@@ -15,3 +15,15 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Local price assets
+
+Price/meta asset files under `assets/prices/` are generated locally and intentionally excluded from version control.
+
+Before running the app, generate or copy the required files:
+
+- `assets/prices/{market}/_top50_meta.json`
+- `assets/prices/{market}/{ticker}/meta.json`
+- `assets/prices/{market}/{ticker}/{year}.json.gz`
+
+The repository keeps only `assets/prices/.gitkeep` to preserve the folder structure.

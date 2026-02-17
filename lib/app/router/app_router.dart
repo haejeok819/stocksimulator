@@ -9,10 +9,6 @@ class AppRouter {
   static const String main = '/';
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
-    if (settings.name == main) {
-      return MaterialPageRoute<void>(builder: (_) => const MainScaffold());
-    }
-
     return MaterialPageRoute<void>(builder: (_) => const MainScaffold());
   }
 }
