@@ -80,9 +80,22 @@ class StockRepository {
 
     final String path = AssetPaths.assetPathMetaList(market);
     try {
-      final dynamic decoded = jsonDecode(await rootBundle.loadString(path));
-      final List<StockModel> loaded = (decoded as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
+      final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
+      if (decodedObject is! List<Object?>) {
+        return <StockModel>[];
+      }
+
+      final List<Map<String, dynamic>> typedMetaList =
+          (decodedObject
+                  .whereType<Map>()
+                  .map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e))
+                  .toList())
+              .asMap()
+              .entries
+              .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
+              .toList();
+
+      final List<StockModel> loaded = typedMetaList
           .asMap()
           .entries
           .map(
