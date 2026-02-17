@@ -191,10 +191,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
           finalAmount: finalAmount,
           profit: profit,
           profitRate: profitRate,
-          onRestart: () {
-            Navigator.of(context).pop();
-            Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst);
-          },
           onClose: () {
             Navigator.of(context).pop();
           },
@@ -284,7 +280,6 @@ class _ResultDialog extends StatefulWidget {
     required this.finalAmount,
     required this.profit,
     required this.profitRate,
-    required this.onRestart,
     required this.onClose,
   });
 
@@ -292,7 +287,6 @@ class _ResultDialog extends StatefulWidget {
   final int finalAmount;
   final int profit;
   final double profitRate;
-  final VoidCallback onRestart;
   final VoidCallback onClose;
 
   @override
@@ -360,8 +354,7 @@ class _ResultDialogState extends State<_ResultDialog> {
         },
       ),
       actions: <Widget>[
-        TextButton(onPressed: widget.onClose, child: const Text('닫기')),
-        ElevatedButton(onPressed: widget.onRestart, child: const Text('다시하기')),
+        ElevatedButton(onPressed: widget.onClose, child: const Text('닫기')),
       ],
     );
   }
