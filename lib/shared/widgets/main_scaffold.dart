@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/app/router/app_router.dart';
-import 'package:stocksimulator/app/theme/app_theme.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -17,8 +16,6 @@ class _MainScaffoldState extends State<MainScaffold> {
     return Scaffold(
       body: IndexedStack(index: _index, children: mainTabs),
       bottomNavigationBar: NavigationBar(
-        backgroundColor: const Color(0xFF24242D),
-        indicatorColor: AppColors.action.withOpacity(0.25),
         selectedIndex: _index,
         onDestinationSelected: (int value) {
           setState(() {

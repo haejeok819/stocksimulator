@@ -7,7 +7,22 @@ class StockRepository {
 
   final MockStockDataSource _dataSource;
 
-  List<StockModel> getStocks() => _dataSource.fetchStocks();
+  List<StockModel> getTopStocks({required StockMarket market, String query = ''}) {
+    final List<StockModel> stocks = _dataSource.fetchStocks(market: market);
+    final String normalized = query.trim().toLowerCase();
+
+    if (normalized.isEmpty) {
+      return stocks;
+    }
+
+    return stocks
+        .where(
+          (StockModel stock) =>
+              stock.name.toLowerCase().contains(normalized) ||
+              stock.symbol.toLowerCase().contains(normalized),
+        )
+        .toList();
+  }
 
   List<double> getChartPrices() => _dataSource.fetchPriceSeries(totalDays: 90);
 }
