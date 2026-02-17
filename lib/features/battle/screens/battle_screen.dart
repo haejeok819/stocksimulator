@@ -45,6 +45,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   Timer? _ticker;
   int _countdown = 0;
   double _speed = 1;
+  bool _pendingFrameUpdate = false;
+  bool _finishing = false;
 
   @override
   void dispose() {
@@ -56,9 +58,24 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
     return _repository.getTopStocks(market: market, query: query);
   }
 
-  Future<StockModel?> _pickStock(StockMarket market) async {
+  void _scheduleFrameUpdate(VoidCallback fn) {
+    if (_pendingFrameUpdate) {
+      return;
+    }
+    _pendingFrameUpdate = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingFrameUpdate = false;
+      if (!mounted) {
+        return;
+      }
+      fn();
+    });
+  }
+
+  Future<StockModel?> _pickStock({required StockMarket initialMarket}) async {
     final TextEditingController controller = TextEditingController();
     String query = '';
+    StockMarket selectedMarket = initialMarket;
     return showModalBottomSheet<StockModel>(
       context: context,
       isScrollControlled: true,
@@ -71,6 +88,21 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                 height: 520,
                 child: Column(
                   children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      child: SegmentedButton<StockMarket>(
+                        segments: const <ButtonSegment<StockMarket>>[
+                          ButtonSegment<StockMarket>(value: StockMarket.us, label: Text('US')),
+                          ButtonSegment<StockMarket>(value: StockMarket.kr, label: Text('KR')),
+                        ],
+                        selected: <StockMarket>{selectedMarket},
+                        onSelectionChanged: (Set<StockMarket> value) {
+                          setState(() {
+                            selectedMarket = value.first;
+                          });
+                        },
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.all(12),
                       child: TextField(
@@ -85,7 +117,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                     ),
                     Expanded(
                       child: FutureBuilder<List<StockModel>>(
-                        future: _loadStocks(market, query),
+                        future: _loadStocks(selectedMarket, query),
                         builder: (BuildContext context, AsyncSnapshot<List<StockModel>> snapshot) {
                           final List<StockModel> stocks = snapshot.data ?? <StockModel>[];
                           return ListView.builder(
@@ -113,8 +145,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   Future<void> _randomMatching() async {
-    final BattleSetupState setup = ref.read(battleSetupProvider);
-    final List<StockModel> stocks = await _repository.getTopStocks(market: setup.market);
+    final List<StockModel> usStocks = await _repository.getTopStocks(market: StockMarket.us);
+    final List<StockModel> krStocks = await _repository.getTopStocks(market: StockMarket.kr);
+    final List<StockModel> stocks = <StockModel>[...usStocks, ...krStocks];
     if (stocks.length < 2) {
       return;
     }
@@ -226,37 +259,113 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
       if (state.status != BattleRunStatus.running) {
         return;
       }
-      final int step = _speed == 1 ? 1 : (_speed == 2 ? 2 : 4);
-      final int next = min(state.progressIndex + step, _points.length - 1);
-      final _BattlePoint current = _points[next];
-      ref.read(battleRunProvider.notifier).setStateValue(
-            state.copyWith(
-              progressIndex: next,
-              currentValueA: current.valueA,
-              currentValueB: current.valueB,
-              currentReturnA: current.returnA,
-              currentReturnB: current.returnB,
-            ),
-          );
-      if (next >= _points.length - 1) {
-        timer.cancel();
-        _finishBattle();
-      }
+      _scheduleFrameUpdate(() {
+        final BattleRunState latest = ref.read(battleRunProvider);
+        if (latest.status != BattleRunStatus.running) {
+          return;
+        }
+
+        final int step = _speed == 1 ? 1 : (_speed == 2 ? 2 : 4);
+        final int next = min(latest.progressIndex + step, _points.length - 1);
+        if (next == latest.progressIndex) {
+          return;
+        }
+
+        final _BattlePoint current = _points[next];
+        ref.read(battleRunProvider.notifier).setStateValue(
+              latest.copyWith(
+                progressIndex: next,
+                currentValueA: current.valueA,
+                currentValueB: current.valueB,
+                currentReturnA: current.returnA,
+                currentReturnB: current.returnB,
+              ),
+            );
+
+        if (next >= _points.length - 1) {
+          timer.cancel();
+          _finishBattle();
+        }
+      });
     });
   }
 
-  void _finishBattle() {
+  Future<void> _finishBattle() async {
+    if (_finishing) {
+      return;
+    }
+    _finishing = true;
     final _BattlePoint finalPoint = _points.last;
     final String winner = finalPoint.valueA >= finalPoint.valueB ? 'A' : 'B';
-    ref.read(battleResultProvider.notifier).state = BattleResultState(
+    final BattleResultState result = BattleResultState(
           finalValueA: finalPoint.valueA,
           finalValueB: finalPoint.valueB,
           finalReturnA: finalPoint.returnA,
           finalReturnB: finalPoint.returnB,
           winner: winner,
         );
+    ref.read(battleResultProvider.notifier).state = result;
     ref.read(battleRunProvider.notifier).setStateValue(ref.read(battleRunProvider).copyWith(status: BattleRunStatus.finished));
+
+    final BattleSetupState setup = ref.read(battleSetupProvider);
+    await _showWinnerBurstDialog(result: result, setup: setup);
+
+    if (!mounted) {
+      return;
+    }
     setState(() => _stage = _BattleStage.result);
+    _finishing = false;
+  }
+
+  Future<void> _showWinnerBurstDialog({required BattleResultState result, required BattleSetupState setup}) async {
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'winner',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 450),
+      pageBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+        return Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A33),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Text('💥', style: TextStyle(fontSize: 52)),
+                  const SizedBox(height: 8),
+                  Text(
+                    '🏆 ${result.winner} 승리!',
+                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('A(${setup.stockA?.ticker ?? '-'}) ${result.finalReturnA.toStringAsFixed(2)}%'),
+                  Text('B(${setup.stockB?.ticker ?? '-'}) ${result.finalReturnB.toStringAsFixed(2)}%'),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '결과를 확인해보세요',
+                    style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+        final Animation<double> curve = CurvedAnimation(parent: animation, curve: Curves.elasticOut);
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: Tween<double>(begin: 0.5, end: 1).animate(curve), child: child),
+        );
+      },
+    );
   }
 
   Future<void> _skipToResult() async {
@@ -321,17 +430,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: <Widget>[
-          SegmentedButton<StockMarket>(
-            segments: const <ButtonSegment<StockMarket>>[
-              ButtonSegment<StockMarket>(value: StockMarket.us, label: Text('US')),
-              ButtonSegment<StockMarket>(value: StockMarket.kr, label: Text('KR')),
-            ],
-            selected: <StockMarket>{setup.market},
-            onSelectionChanged: (Set<StockMarket> value) => ref.read(battleSetupProvider.notifier).setMarket(value.first),
-          ),
-          const SizedBox(height: 12),
           _stockCard('종목 A 선택', setup.stockA, () async {
-            final StockModel? picked = await _pickStock(setup.market);
+            final StockModel? picked = await _pickStock(initialMarket: setup.stockA?.market == 'KR' ? StockMarket.kr : StockMarket.us);
             if (picked != null) ref.read(battleSetupProvider.notifier).setStockA(picked);
           }),
           const Padding(
@@ -339,7 +439,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
             child: CircleAvatar(radius: 18, child: Text('VS')),
           ),
           _stockCard('종목 B 선택', setup.stockB, () async {
-            final StockModel? picked = await _pickStock(setup.market);
+            final StockModel? picked = await _pickStock(initialMarket: setup.stockB?.market == 'KR' ? StockMarket.kr : StockMarket.us);
             if (picked != null) ref.read(battleSetupProvider.notifier).setStockB(picked);
           }),
           const SizedBox(height: 14),
