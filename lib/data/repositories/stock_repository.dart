@@ -13,6 +13,7 @@ class StockRepository {
 
   final PriceRepository _priceRepository;
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
+  final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
   Future<List<StockModel>> getTopStocks({required StockMarket market, String query = ''}) async {
     final String marketCode = market == StockMarket.kr ? 'KR' : 'US';
@@ -22,6 +23,51 @@ class StockRepository {
       return all;
     }
     return all.where((StockModel stock) => stock.matchesQuery(normalized)).toList();
+  }
+
+  Future<List<int>> loadTradingDaysYmd({required String market, required String ticker}) async {
+    final String cacheKey = '$market|$ticker';
+    final List<int>? cached = _tradingDaysCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
+    final List<int> availableYears = await _priceRepository.availableYears(market: market, ticker: ticker);
+    if (availableYears.isEmpty) {
+      _tradingDaysCache[cacheKey] = <int>[];
+      return <int>[];
+    }
+
+    final bool has2005 = availableYears.contains(2005);
+    final int minYear = has2005 ? 2005 : availableYears.first;
+    final int maxYear = availableYears.last;
+
+    final Set<int> mergedDays = <int>{};
+    for (int year = minYear; year <= maxYear; year++) {
+      try {
+        final Object? decoded = await _priceRepository.loadYearData(
+          market: market,
+          ticker: ticker,
+          year: year,
+        );
+        if (decoded is! List<Object?>) {
+          continue;
+        }
+
+        for (final List<Object?> row in decoded.whereType<List<Object?>>()) {
+          if (row.length < 2) {
+            continue;
+          }
+          mergedDays.add((row[0] as num).toInt());
+        }
+      } catch (error) {
+        debugPrint('Trading day scan skipped: market=$market, ticker=$ticker, year=$year ($error)');
+      }
+    }
+
+    final List<int> sortedDays = mergedDays.toList()..sort();
+    _tradingDaysCache[cacheKey] = sortedDays;
+    return sortedDays;
   }
 
   Future<List<PricePoint>> loadRange({
