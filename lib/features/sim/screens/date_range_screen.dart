@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/investment_input_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
-import 'package:stocksimulator/features/sim/widgets/date_wheel_picker.dart';
+import 'package:stocksimulator/features/sim/widgets/date_card.dart';
+import 'package:stocksimulator/features/sim/widgets/date_picker_modal.dart';
+import 'package:stocksimulator/features/sim/widgets/date_range_header.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class DateRangeScreen extends StatefulWidget {
@@ -20,7 +22,7 @@ class DateRangeScreen extends StatefulWidget {
   State<DateRangeScreen> createState() => _DateRangeScreenState();
 }
 
-class _DateRangeScreenState extends State<DateRangeScreen> {
+class _DateRangeScreenState extends State<DateRangeScreen> with SingleTickerProviderStateMixin {
   static const int _minTradingDays = 30;
 
   bool _loading = true;
@@ -31,13 +33,21 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
   late DateTime _endDate;
   int _minYear = 2005;
   int _maxYear = DateTime.now().year;
+  late final AnimationController _arrowController;
 
   @override
   void initState() {
     super.initState();
     _startDate = widget.flowState.startDate;
     _endDate = widget.flowState.endDate;
+    _arrowController = AnimationController(vsync: this, duration: const Duration(milliseconds: 450))..repeat(reverse: true);
     _loadTradingDays();
+  }
+
+  @override
+  void dispose() {
+    _arrowController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTradingDays() async {
@@ -103,12 +113,12 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
     }
 
     final DateTime initial = isStart ? _startDate : _endDate;
-    final DateTime? selected = await showDateWheelPicker(
+    final DateTime? selected = await showDatePickerModal(
       context: context,
       initialDate: initial,
       minYear: _minYear,
       maxYear: _maxYear,
-      title: isStart ? '시작일 선택' : '종료일 선택',
+      title: isStart ? '매수 시점' : '매도 시점',
     );
     if (selected == null) {
       return;
@@ -161,8 +171,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
 
   String _formatDate(DateTime date) {
     const List<String> weekdays = <String>['월', '화', '수', '목', '금', '토', '일'];
-    final int ymd = _toYmd(date);
-    return '${_formatYmd(ymd)} (${weekdays[date.weekday - 1]})';
+    return '${_formatYmd(_toYmd(date))} (${weekdays[date.weekday - 1]})';
   }
 
   DateTime _fromYmd(int ymd) {
@@ -179,44 +188,49 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
     final int selectedDays = _selectedTradingDaysCount();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('날짜 선택')),
+      backgroundColor: const Color(0xFF1E1E24),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('투자 기간 선택'),
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? Center(child: Text(_error!))
+                  ? Center(child: Text(_error!, style: const TextStyle(color: Colors.white)))
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        const Text('거래일 기준으로 기간을 선택하세요 (최소 30거래일).'),
-                        const SizedBox(height: 16),
-                        ListTile(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          tileColor: Theme.of(context).colorScheme.surfaceVariant,
-                          title: const Text('시작일'),
-                          subtitle: Text(_formatDate(_startDate)),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _pickDate(isStart: true),
+                        const SizedBox(height: 18),
+                        DateRangeHeader(
+                          start: _formatYmd(_toYmd(_startDate)),
+                          end: _formatYmd(_toYmd(_endDate)),
+                          tradingDayCount: selectedDays,
+                          animation: CurvedAnimation(parent: _arrowController, curve: Curves.easeInOut),
                         ),
-                        const SizedBox(height: 10),
-                        ListTile(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          tileColor: Theme.of(context).colorScheme.surfaceVariant,
-                          title: const Text('종료일'),
-                          subtitle: Text(_formatDate(_endDate)),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _pickDate(isStart: false),
-                        ),
+                        const SizedBox(height: 26),
+                        DateCard(label: '매수 시점', value: _formatDate(_startDate), onTap: () => _pickDate(isStart: true)),
                         const SizedBox(height: 12),
-                        Text('선택 구간: $selectedDays 거래일'),
-                        Text('연도 범위: $_minYear ~ $_maxYear'),
-                        Text(
-                          '데이터 범위: ${_formatYmd(_tradingDaysYmd.first)} ~ ${_formatYmd(_tradingDaysYmd.last)}',
-                        ),
+                        DateCard(label: '매도 시점', value: _formatDate(_endDate), onTap: () => _pickDate(isStart: false)),
                         const Spacer(),
+                        const Text(
+                          '데이터 보유 기간',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${_formatYmd(_tradingDaysYmd.first)} ~ ${_formatYmd(_tradingDaysYmd.last)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 16),
                         ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF5677E7)),
                           onPressed: selectedDays < _minTradingDays
                               ? null
                               : () {
@@ -230,7 +244,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
                                     ),
                                   );
                                 },
-                          child: const Text('다음'),
+                          child: const Text('다음', style: TextStyle(color: Colors.white)),
                         ),
                       ],
                     ),
