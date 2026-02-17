@@ -8,6 +8,7 @@ import 'package:stocksimulator/data/models/simulation_result.dart';
 import 'package:stocksimulator/data/repositories/history_repository.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
+import 'package:stocksimulator/shared/services/ad_service.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
 
@@ -40,6 +41,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   @override
   void initState() {
     super.initState();
+    AdService.instance.preloadInterstitial();
     _startPlayback();
   }
 
@@ -192,7 +194,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
           profit: profit,
           profitRate: profitRate,
           onClose: () {
-            Navigator.of(context).pop();
+            AdService.instance.showOnClose(
+              onDone: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
+            );
           },
         );
       },
@@ -296,10 +300,12 @@ class _ResultDialog extends StatefulWidget {
 class _ResultDialogState extends State<_ResultDialog> {
   BannerAd? _banner;
   bool _bannerReady = false;
+  bool _closing = false;
 
   @override
   void initState() {
     super.initState();
+    AdService.instance.preloadInterstitial();
     _banner = AdHelper.createBannerAd(
       listener: BannerAdListener(
         onAdLoaded: (Ad ad) {
@@ -354,7 +360,17 @@ class _ResultDialogState extends State<_ResultDialog> {
         },
       ),
       actions: <Widget>[
-        ElevatedButton(onPressed: widget.onClose, child: const Text('닫기')),
+        ElevatedButton(
+          onPressed: _closing
+              ? null
+              : () {
+                  setState(() {
+                    _closing = true;
+                  });
+                  widget.onClose();
+                },
+          child: const Text('닫기'),
+        ),
       ],
     );
   }
