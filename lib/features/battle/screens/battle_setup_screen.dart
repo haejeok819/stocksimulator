@@ -2,12 +2,12 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/battle/screens/battle_playback_screen.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleSetupScreen extends ConsumerStatefulWidget {
   const BattleSetupScreen({super.key});
@@ -454,7 +454,6 @@ class BattleAmountInput extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final NumberFormat formatter = NumberFormat('#,###');
 
     return Card(
       child: Padding(
@@ -464,7 +463,7 @@ class BattleAmountInput extends ConsumerWidget {
           children: <Widget>[
             const Text('투자금', style: TextStyle(fontSize: 14, color: Color(0xFFA1A1A8))),
             const SizedBox(height: 8),
-            Text('₩ ${formatter.format(setup.investAmount)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(AppNumberFormat.formatMoney(setup.investAmount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             Row(
               children: <Widget>[
@@ -503,10 +502,7 @@ class BattleAmountInput extends ConsumerWidget {
   }
 
   String _presetLabel(int amount) {
-    if (amount >= 1000000) {
-      return '₩${(amount / 1000000).toStringAsFixed(0)}M';
-    }
-    return '₩${(amount / 1000).toStringAsFixed(0)}k';
+    return AppNumberFormat.formatMoney(amount, symbol: '₩');
   }
 }
 

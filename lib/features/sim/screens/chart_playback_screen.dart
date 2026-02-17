@@ -12,6 +12,7 @@ import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class ChartPlaybackScreen extends StatefulWidget {
   const ChartPlaybackScreen({
@@ -202,9 +203,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
             children: <Widget>[
               Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 4),
-              Text('₩ ${current.value.toStringAsFixed(0)}', style: PlaybackDesignTokens.headlineNumber),
+              Text(AppNumberFormat.formatMoney(current.value), style: PlaybackDesignTokens.headlineNumber),
               const SizedBox(height: 2),
-              Text('종가 ${current.close.toStringAsFixed(2)}', style: PlaybackDesignTokens.secondary),
+              Text('종가 ${AppNumberFormat.formatPrice(current.close, decimals: 2)}', style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 12),
               Expanded(
                 child: Container(
@@ -413,13 +414,13 @@ class _ResultDialogState extends State<_ResultDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('초기 투자금: ${widget.initialAmount} 원'),
+              Text('초기 투자금: ${AppNumberFormat.formatInt(widget.initialAmount)} 원'),
               const SizedBox(height: 6),
-              Text('최종 평가금: $finalAmount 원'),
+              Text('최종 평가금: ${AppNumberFormat.formatInt(finalAmount)} 원'),
               const SizedBox(height: 6),
-              Text('수익금: $profit 원'),
+              Text('수익금: ${AppNumberFormat.formatInt(profit)} 원'),
               const SizedBox(height: 6),
-              Text('수익률: ${profitRate.toStringAsFixed(2)}%'),
+              Text('수익률: ${AppNumberFormat.formatPercent(profitRate)}'),
               const SizedBox(height: 12),
               if (_bannerReady && _banner != null)
                 SizedBox(

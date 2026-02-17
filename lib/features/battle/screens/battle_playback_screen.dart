@@ -5,12 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattlePlaybackScreen extends ConsumerStatefulWidget {
   const BattlePlaybackScreen({super.key});
@@ -41,7 +41,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     return stock.displayName;
   }
 
-  String _fmt(double value) => NumberFormat('#,###').format(value.round());
+  String _fmt(double value) => AppNumberFormat.formatInt(value);
 
   String _formatYmd(int ymd) {
     final String s = ymd.toString().padLeft(8, '0');
@@ -76,8 +76,8 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                 const SizedBox(height: 12),
                 Text('$winner 승리', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF9AD3FF))),
                 const SizedBox(height: 8),
-                Text('승자 수익률 ${winnerRate >= 0 ? '+' : ''}${winnerRate.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                Text('상대 수익률 ${loserRate >= 0 ? '+' : ''}${loserRate.toStringAsFixed(2)}%', style: const TextStyle(color: Color(0xFFA1A1A8))),
+                Text('승자 수익률 ${AppNumberFormat.formatPercent(winnerRate)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                Text('상대 수익률 ${AppNumberFormat.formatPercent(loserRate)}', style: const TextStyle(color: Color(0xFFA1A1A8))),
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
@@ -424,7 +424,7 @@ class _LeaderCardState extends State<_LeaderCard> with SingleTickerProviderState
     super.dispose();
   }
 
-  String _fmt(double value) => NumberFormat('#,###').format(value.round());
+  String _fmt(double value) => AppNumberFormat.formatInt(value);
 
   @override
   Widget build(BuildContext context) {
@@ -463,7 +463,7 @@ class _LeaderCardState extends State<_LeaderCard> with SingleTickerProviderState
                   Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 8),
                   Text('₩ ${_fmt(widget.value)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text('${widget.rate >= 0 ? '+' : ''}${widget.rate.toStringAsFixed(2)}%', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  Text(AppNumberFormat.formatPercent(widget.rate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
                 ],
               ),
             ),
@@ -619,7 +619,7 @@ class _LeadGauge extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text('승부 게이지 · 격차 ${gap.toStringAsFixed(2)}%p', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+        Text('승부 게이지 · 격차 ${AppNumberFormat.formatPercentPoint(gap)}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
       ],
     );
   }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleResultScreen extends ConsumerWidget {
   const BattleResultScreen({super.key});
 
-  String _fmt(double value) => NumberFormat('#,###').format(value.round());
+  String _fmt(double value) => AppNumberFormat.formatInt(value);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -78,7 +78,7 @@ class BattleResultScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
             Text('${_fmt(finalValue)}원'),
-            Text('${finalRate.toStringAsFixed(2)}%'),
+            Text(AppNumberFormat.formatPercent(finalRate)),
           ],
         ),
       ],
