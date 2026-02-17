@@ -1,0 +1,25 @@
+import 'package:flutter/material.dart';
+import 'package:stocksimulator/features/history/history_screen.dart';
+import 'package:stocksimulator/features/popular/popular_screen.dart';
+import 'package:stocksimulator/features/settings/settings_screen.dart';
+import 'package:stocksimulator/features/sim/screens/sim_home_screen.dart';
+import 'package:stocksimulator/shared/widgets/main_scaffold.dart';
+
+class AppRouter {
+  static const String main = '/';
+
+  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+    if (settings.name == main) {
+      return MaterialPageRoute<void>(builder: (_) => const MainScaffold());
+    }
+
+    return MaterialPageRoute<void>(builder: (_) => const MainScaffold());
+  }
+}
+
+final List<Widget> mainTabs = <Widget>[
+  const SimHomeScreen(),
+  const PopularScreen(),
+  const HistoryScreen(),
+  const SettingsScreen(),
+];
