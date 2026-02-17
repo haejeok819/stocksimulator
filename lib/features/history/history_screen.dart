@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/data/models/simulation_result.dart';
 import 'package:stocksimulator/data/repositories/history_repository.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -44,8 +45,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    Text('금액 ${item.amount}'),
-                    Text('수익률 ${item.profitRate.toStringAsFixed(2)}%'),
+                    Text('금액 ${AppNumberFormat.formatInt(item.amount)}'),
+                    Text('수익률 ${AppNumberFormat.formatPercent(item.profitRate)}'),
                   ],
                 ),
               );
