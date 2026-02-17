@@ -187,6 +187,14 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     );
   }
 
+
+  double _returnPercentAt(int index) {
+    if (widget.points.isEmpty) return 0;
+    final double basePrice = widget.points.first.close <= 0 ? 1 : widget.points.first.close;
+    final int safe = index.clamp(0, widget.points.length - 1);
+    return ((widget.points[safe].close / basePrice) - 1) * 100;
+  }
+
   String _formatYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
@@ -196,6 +204,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   Widget build(BuildContext context) {
     final bool hasData = widget.points.isNotEmpty;
     final SimulationPoint current = hasData ? widget.points[_index] : const SimulationPoint(ymd: 0, close: 0, value: 0);
+    final double currentReturn = hasData ? _returnPercentAt(_index) : 0;
+    final double endReturn = hasData ? _returnPercentAt(widget.points.length - 1) : 0;
 
     return Scaffold(
       appBar: AppBar(title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생', style: PlaybackDesignTokens.title)),
@@ -208,9 +218,15 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
             children: <Widget>[
               Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 4),
-              Text(AppNumberFormat.formatMoney(current.value), style: PlaybackDesignTokens.headlineNumber),
+              Text(AppNumberFormat.formatPercent(currentReturn, decimals: 1, signed: true), style: PlaybackDesignTokens.headlineNumber),
               const SizedBox(height: 2),
-              Text('종가 ${AppNumberFormat.formatPrice(current.close, decimals: 2)}', style: PlaybackDesignTokens.secondary),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text('시작 +0.0%', style: PlaybackDesignTokens.secondary),
+                  Text('종료 ${AppNumberFormat.formatPercent(endReturn, decimals: 1, signed: true)}', style: PlaybackDesignTokens.secondary),
+                ],
+              ),
               const SizedBox(height: 12),
               Expanded(
                 child: Container(
@@ -231,7 +247,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                           },
                         ),
                       ),
-                      const _CenterFocusMarker(),
                     ],
                   ),
                 ),
@@ -257,7 +272,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
               ),
               const SizedBox(height: 10),
-              Text('최근 30거래일 슬라이딩 윈도우 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+              Text('전체 기간 수익률(%) 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
               if (_showSkip)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -271,42 +286,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CenterFocusMarker extends StatelessWidget {
-  const _CenterFocusMarker();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (_, BoxConstraints constraints) {
-        final double centerX = constraints.maxWidth / 2;
-        return Stack(
-          children: <Widget>[
-            Positioned(
-              left: centerX,
-              top: 8,
-              bottom: 8,
-              child: Container(width: 1, color: const Color(0x66FFFFFF)),
-            ),
-            Positioned(
-              left: centerX - 5,
-              top: 12,
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: <BoxShadow>[BoxShadow(color: Colors.white.withOpacity(0.5), blurRadius: 8)],
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
