@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="이때 샀더라면?"
+        android:label="라고 할 때 살걸"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -18,9 +18,7 @@
                  to determine the Window background behind the Flutter UI. -->
             <meta-data
                 android:name="com.google.android.gms.ads.APPLICATION_ID"
-                android:resource="@style/NormalTheme"
-                android:value="ca-app-pub-3940256099942544~3347511713"
-              />
+                android:value="ca-app-pub-3940256099942544~3347511713"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
