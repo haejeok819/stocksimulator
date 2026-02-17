@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/loading_screen.dart';
+import 'package:stocksimulator/features/sim/state/investment_amount_provider.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
-class InvestmentInputScreen extends StatefulWidget {
+class InvestmentInputScreen extends ConsumerStatefulWidget {
   const InvestmentInputScreen({
     super.key,
     required this.repository,
@@ -15,125 +21,345 @@ class InvestmentInputScreen extends StatefulWidget {
   final SimulationFlowState flowState;
 
   @override
-  State<InvestmentInputScreen> createState() => _InvestmentInputScreenState();
+  ConsumerState<InvestmentInputScreen> createState() => _InvestmentInputScreenState();
 }
 
-class _InvestmentInputScreenState extends State<InvestmentInputScreen> {
-  late String _amount;
+class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
+  static const List<int> _presetAmounts = <int>[
+    100,
+    1000,
+    10000,
+    100000,
+    1000000,
+    5000000,
+    10000000,
+    50000000,
+    100000000,
+  ];
+
+  final NumberFormat _formatter = NumberFormat('#,###');
+  Timer? _repeatTimer;
 
   @override
   void initState() {
     super.initState();
-    _amount = widget.flowState.investment.toString();
-  }
-
-  int get _amountValue => int.tryParse(_amount) ?? 0;
-
-  void _append(String value) {
-    setState(() {
-      if (_amount == '0') {
-        _amount = value;
-      } else {
-        _amount += value;
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(investmentAmountProvider.notifier).setAmount(widget.flowState.investment);
     });
   }
 
-  void _backspace() {
-    setState(() {
-      if (_amount.length <= 1) {
-        _amount = '0';
-      } else {
-        _amount = _amount.substring(0, _amount.length - 1);
-      }
-    });
+  @override
+  void dispose() {
+    _repeatTimer?.cancel();
+    super.dispose();
   }
 
-  String _formatWon(int value) {
-    final String raw = value.toString();
-    final StringBuffer buffer = StringBuffer();
-    for (int i = 0; i < raw.length; i++) {
-      final int fromEnd = raw.length - i;
-      buffer.write(raw[i]);
-      if (fromEnd > 1 && fromEnd % 3 == 1) {
-        buffer.write(',');
-      }
+  String _formatWon(int value) => '${_formatter.format(value)}원';
+
+  String _presetLabel(int value) {
+    if (value >= 100000000) {
+      return '${(value / 100000000).toStringAsFixed(0)}억원';
     }
-    return '${buffer.toString()}원';
+    if (value >= 10000) {
+      return '${(value / 10000).toStringAsFixed(0)}만원';
+    }
+    return _formatWon(value);
+  }
+
+  String _approxKorean(int value) {
+    if (value >= 100000000) {
+      return '약 ${(value / 100000000).toStringAsFixed(1)}억원';
+    }
+    if (value >= 10000) {
+      return '약 ${(value / 10000).toStringAsFixed(0)}만원';
+    }
+    return '약 ${_formatter.format(value)}원';
+  }
+
+  void _onFineTuneTap(int delta) {
+    ref.read(investmentAmountProvider.notifier).addAmount(delta);
+  }
+
+  void _startRepeat(int delta) {
+    _repeatTimer?.cancel();
+    _repeatTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      ref.read(investmentAmountProvider.notifier).addAmount(delta);
+    });
+  }
+
+  void _stopRepeat() {
+    _repeatTimer?.cancel();
+  }
+
+  Future<void> _showDirectInput(int currentAmount) async {
+    final TextEditingController controller = TextEditingController(text: currentAmount.toString());
+    final int? value = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: const Color(0xFF2A2A32),
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const Text('직접 입력', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                inputFormatters: <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly],
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: '100 ~ 100,000,000',
+                  hintStyle: TextStyle(color: Color(0x99FFFFFF)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(int.tryParse(controller.text)),
+                child: const Text('적용'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (value != null) {
+      ref.read(investmentAmountProvider.notifier).setAmount(value);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const List<String> keys = <String>[
-      '1', '2', '3',
-      '4', '5', '6',
-      '7', '8', '9',
-      '00', '0', '←',
-    ];
+    final int amount = ref.watch(investmentAmountProvider);
+    final bool canStart = amount >= kMinInvestmentAmount && amount <= kMaxInvestmentAmount;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('투자금 입력')),
+      backgroundColor: const Color(0xFF1E1E24),
+      appBar: AppBar(
+        title: const Text('투자금 입력'),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text('초기 투자금을 입력하세요.'),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF24242D),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                _formatWon(_amountValue),
-                textAlign: TextAlign.right,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-            ),
-            const SizedBox(height: 16),
             Expanded(
-              child: GridView.builder(
-                itemCount: keys.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 1.6,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: 6),
+                    const Text('초기 투자금을 입력하세요.', style: TextStyle(color: Color(0xFFA1A1A8))),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A32),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            _formatWon(amount),
+                            style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _approxKorean(amount),
+                            style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text('빠른 선택', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    const SizedBox(height: 8),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _presetAmounts.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 3.0,
+                      ),
+                      itemBuilder: (BuildContext context, int index) {
+                        final int preset = _presetAmounts[index];
+                        final bool selected = amount == preset;
+                        return _PresetChip(
+                          label: _presetLabel(preset),
+                          selected: selected,
+                          onTap: () => ref.read(investmentAmountProvider.notifier).setAmount(preset),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    const Text('미세 조정', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: <int>[-100000, -10000, 10000, 100000].map((int delta) {
+                        final String label = switch (delta) {
+                          -100000 => '-10만',
+                          -10000 => '-1만',
+                          10000 => '+1만',
+                          _ => '+10만',
+                        };
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: _FineTuneButton(
+                              label: label,
+                              onTap: () => _onFineTuneTap(delta),
+                              onRepeatStart: () => _startRepeat(delta),
+                              onRepeatStop: _stopRepeat,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 6),
+                    TextButton(
+                      onPressed: () => _showDirectInput(amount),
+                      child: const Text('직접 입력', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                 ),
-                itemBuilder: (BuildContext context, int index) {
-                  final String key = keys[index];
-                  return ElevatedButton(
-                    onPressed: () {
-                      if (key == '←') {
-                        _backspace();
-                      } else {
-                        _append(key);
-                      }
-                    },
-                    child: Text(key, style: Theme.of(context).textTheme.titleLarge),
-                  );
-                },
               ),
             ),
-            ElevatedButton(
-              onPressed: _amountValue > 0
-                  ? () {
-                      widget.flowState.setInvestment(_amountValue);
-                      Navigator.of(context).push(
-                        buildRightSlideRoute(
-                          LoadingScreen(
-                            repository: widget.repository,
-                            flowState: widget.flowState,
+            SafeArea(
+              top: false,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5677E7),
+                  disabledBackgroundColor: const Color(0xFF3A3A42),
+                ),
+                onPressed: canStart
+                    ? () {
+                        widget.flowState.setInvestment(amount);
+                        Navigator.of(context).push(
+                          buildRightSlideRoute(
+                            LoadingScreen(
+                              repository: widget.repository,
+                              flowState: widget.flowState,
+                            ),
                           ),
-                        ),
-                      );
-                    }
-                  : null,
-              child: const Text('재생 시작'),
+                        );
+                      }
+                    : null,
+                child: const Text('재생 시작', style: TextStyle(color: Colors.white)),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFF5677E7) : const Color(0xFF2A2A32),
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(19),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: const Color(0xFF3A3A42), width: 1),
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FineTuneButton extends StatelessWidget {
+  const _FineTuneButton({
+    required this.label,
+    required this.onTap,
+    required this.onRepeatStart,
+    required this.onRepeatStop,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final VoidCallback onRepeatStart;
+  final VoidCallback onRepeatStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: Material(
+        color: const Color(0xFF2A2A32),
+        borderRadius: BorderRadius.circular(16),
+        child: Listener(
+          onPointerUp: (_) => onRepeatStop(),
+          onPointerCancel: (_) => onRepeatStop(),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            onLongPress: onRepeatStart,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF3A3A42)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
