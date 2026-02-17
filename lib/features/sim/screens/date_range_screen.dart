@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/investment_input_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/features/sim/widgets/date_wheel_picker.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class DateRangeScreen extends StatefulWidget {
@@ -25,12 +26,17 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
   bool _loading = true;
   String? _error;
   List<int> _tradingDaysYmd = <int>[];
-  int _startIndex = 0;
-  int _endIndex = 0;
+  Set<int> _tradingDaySet = <int>{};
+  late DateTime _startDate;
+  late DateTime _endDate;
+  int _minYear = 2005;
+  int _maxYear = DateTime.now().year;
 
   @override
   void initState() {
     super.initState();
+    _startDate = widget.flowState.startDate;
+    _endDate = widget.flowState.endDate;
     _loadTradingDays();
   }
 
@@ -60,24 +66,24 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
         return;
       }
 
-      int start = _findFirstOnOrAfter(days, _toYmd(widget.flowState.startDate));
-      int end = _findLastOnOrBefore(days, _toYmd(widget.flowState.endDate));
-      if (start > end) {
-        start = 0;
-        end = days.length - 1;
-      }
+      final Set<int> daySet = days.toSet();
+      final int firstYear = days.first ~/ 10000;
+      final int lastYear = days.last ~/ 10000;
+      final bool has2005 = days.any((int ymd) => (ymd ~/ 10000) == 2005);
 
-      final ({int start, int end}) normalized = _normalizeRange(
-        start: start,
-        end: end,
-        changedStart: false,
-        total: days.length,
-      );
+      DateTime start = _adjustToTradingDayOrFirst(widget.flowState.startDate, daySet, days.first);
+      DateTime end = _adjustToTradingDayOrFirst(widget.flowState.endDate, daySet, days.first);
+      if (start.isAfter(end)) {
+        start = end;
+      }
 
       setState(() {
         _tradingDaysYmd = days;
-        _startIndex = normalized.start;
-        _endIndex = normalized.end;
+        _tradingDaySet = daySet;
+        _minYear = has2005 ? 2005 : firstYear;
+        _maxYear = lastYear;
+        _startDate = start;
+        _endDate = end;
         _loading = false;
       });
     } catch (error) {
@@ -91,129 +97,61 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
     }
   }
 
-  int _findFirstOnOrAfter(List<int> days, int targetYmd) {
-    for (int i = 0; i < days.length; i++) {
-      if (days[i] >= targetYmd) {
-        return i;
-      }
-    }
-    return days.length - 1;
-  }
-
-  int _findLastOnOrBefore(List<int> days, int targetYmd) {
-    for (int i = days.length - 1; i >= 0; i--) {
-      if (days[i] <= targetYmd) {
-        return i;
-      }
-    }
-    return 0;
-  }
-
-  ({int start, int end}) _normalizeRange({
-    required int start,
-    required int end,
-    required bool changedStart,
-    required int total,
-  }) {
-    int normalizedStart = start.clamp(0, total - 1);
-    int normalizedEnd = end.clamp(0, total - 1);
-
-    if (normalizedStart > normalizedEnd) {
-      if (changedStart) {
-        normalizedEnd = normalizedStart;
-      } else {
-        normalizedStart = normalizedEnd;
-      }
-    }
-
-    final int minGap = _minTradingDays - 1;
-    if (normalizedEnd - normalizedStart < minGap && total >= _minTradingDays) {
-      if (changedStart) {
-        normalizedEnd = (normalizedStart + minGap).clamp(0, total - 1);
-        if (normalizedEnd - normalizedStart < minGap) {
-          normalizedStart = (normalizedEnd - minGap).clamp(0, total - 1);
-        }
-      } else {
-        normalizedStart = (normalizedEnd - minGap).clamp(0, total - 1);
-        if (normalizedEnd - normalizedStart < minGap) {
-          normalizedEnd = (normalizedStart + minGap).clamp(0, total - 1);
-        }
-      }
-    }
-
-    return (start: normalizedStart, end: normalizedEnd);
-  }
-
   Future<void> _pickDate({required bool isStart}) async {
     if (_tradingDaysYmd.isEmpty) {
       return;
     }
 
-    final int initialIndex = isStart ? _startIndex : _endIndex;
-    int tempIndex = initialIndex;
-    final FixedExtentScrollController controller = FixedExtentScrollController(initialItem: initialIndex);
-
-    final int? pickedIndex = await showModalBottomSheet<int>(
+    final DateTime initial = isStart ? _startDate : _endDate;
+    final DateTime? selected = await showDateWheelPicker(
       context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: SizedBox(
-            height: 320,
-            child: Column(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('취소'),
-                      ),
-                      Text(isStart ? '시작일 선택' : '종료일 선택'),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(tempIndex),
-                        child: const Text('확인'),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: controller,
-                    itemExtent: 40,
-                    onSelectedItemChanged: (int value) {
-                      tempIndex = value;
-                    },
-                    children: _tradingDaysYmd
-                        .map((int ymd) => Center(child: Text(_formatYmdWithWeekday(ymd))))
-                        .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      initialDate: initial,
+      minYear: _minYear,
+      maxYear: _maxYear,
+      title: isStart ? '시작일 선택' : '종료일 선택',
     );
-
-    if (pickedIndex == null) {
+    if (selected == null) {
       return;
     }
 
+    final DateTime adjusted = _adjustToTradingDayOrFirst(selected, _tradingDaySet, _tradingDaysYmd.first);
+
     setState(() {
-      final int nextStart = isStart ? pickedIndex : _startIndex;
-      final int nextEnd = isStart ? _endIndex : pickedIndex;
-      final ({int start, int end}) normalized = _normalizeRange(
-        start: nextStart,
-        end: nextEnd,
-        changedStart: isStart,
-        total: _tradingDaysYmd.length,
-      );
-      _startIndex = normalized.start;
-      _endIndex = normalized.end;
+      if (isStart) {
+        _startDate = adjusted;
+        if (_startDate.isAfter(_endDate)) {
+          _endDate = _startDate;
+        }
+      } else {
+        _endDate = adjusted;
+        if (_endDate.isBefore(_startDate)) {
+          _startDate = _endDate;
+        }
+      }
     });
+  }
+
+  DateTime _adjustToTradingDayOrFirst(DateTime selected, Set<int> tradingSet, int firstYmd) {
+    DateTime cursor = DateTime(selected.year, selected.month, selected.day);
+    final DateTime lowerBound = _fromYmd(firstYmd);
+
+    while (cursor.isAfter(lowerBound) || cursor.isAtSameMomentAs(lowerBound)) {
+      if (tradingSet.contains(_toYmd(cursor))) {
+        return cursor;
+      }
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+
+    return lowerBound;
+  }
+
+  int _selectedTradingDaysCount() {
+    if (_tradingDaysYmd.isEmpty) {
+      return 0;
+    }
+    final int startYmd = _toYmd(_startDate);
+    final int endYmd = _toYmd(_endDate);
+    return _tradingDaysYmd.where((int ymd) => ymd >= startYmd && ymd <= endYmd).length;
   }
 
   String _formatYmd(int ymd) {
@@ -221,9 +159,9 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
-  String _formatYmdWithWeekday(int ymd) {
-    final DateTime date = _fromYmd(ymd);
+  String _formatDate(DateTime date) {
     const List<String> weekdays = <String>['월', '화', '수', '목', '금', '토', '일'];
+    final int ymd = _toYmd(date);
     return '${_formatYmd(ymd)} (${weekdays[date.weekday - 1]})';
   }
 
@@ -238,8 +176,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasDays = _tradingDaysYmd.isNotEmpty;
-    final int selectedDays = hasDays ? (_endIndex - _startIndex + 1) : 0;
+    final int selectedDays = _selectedTradingDaysCount();
 
     return Scaffold(
       appBar: AppBar(title: const Text('날짜 선택')),
@@ -259,7 +196,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           tileColor: Theme.of(context).colorScheme.surfaceVariant,
                           title: const Text('시작일'),
-                          subtitle: Text(_formatYmdWithWeekday(_tradingDaysYmd[_startIndex])),
+                          subtitle: Text(_formatDate(_startDate)),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => _pickDate(isStart: true),
                         ),
@@ -268,12 +205,13 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           tileColor: Theme.of(context).colorScheme.surfaceVariant,
                           title: const Text('종료일'),
-                          subtitle: Text(_formatYmdWithWeekday(_tradingDaysYmd[_endIndex])),
+                          subtitle: Text(_formatDate(_endDate)),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => _pickDate(isStart: false),
                         ),
                         const SizedBox(height: 12),
                         Text('선택 구간: $selectedDays 거래일'),
+                        Text('연도 범위: $_minYear ~ $_maxYear'),
                         Text(
                           '데이터 범위: ${_formatYmd(_tradingDaysYmd.first)} ~ ${_formatYmd(_tradingDaysYmd.last)}',
                         ),
@@ -282,10 +220,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
                           onPressed: selectedDays < _minTradingDays
                               ? null
                               : () {
-                                  widget.flowState.setDateRange(
-                                    _fromYmd(_tradingDaysYmd[_startIndex]),
-                                    _fromYmd(_tradingDaysYmd[_endIndex]),
-                                  );
+                                  widget.flowState.setDateRange(_startDate, _endDate);
                                   Navigator.of(context).push(
                                     buildRightSlideRoute(
                                       InvestmentInputScreen(
