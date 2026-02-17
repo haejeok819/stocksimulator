@@ -1,8 +1,6 @@
-import 'dart:convert';
-
-import 'package:flutter/services.dart';
 import 'package:stocksimulator/data/assets/price_asset_index.dart';
 
+/// Backward-compatible repository wrapper for top50/year loading.
 class Top50Repository {
   Top50Repository({PriceAssetIndex? assetIndex}) : _assetIndex = assetIndex ?? const PriceAssetIndex();
 
@@ -11,7 +9,7 @@ class Top50Repository {
   Future<List<String>> loadTop50Tickers(String market) async {
     _validateMarket(market);
 
-    final String assetPath = 'assets/prices/$market/_top50_meta.json';
+    final String assetPath = 'assets/prices/${market}_top50_meta.json';
     final List<String> assets = await _assetIndex.listPriceAssets();
     if (!assets.contains(assetPath)) {
       throw StateError(
@@ -19,24 +17,28 @@ class Top50Repository {
       );
     }
 
-    final Object? metaObject = jsonDecode(await rootBundle.loadString(assetPath));
-    final List<Map<String, Object?>> rows = _extractMetaRows(metaObject);
+    final Object? decoded = await _assetIndex.loadAnyJsonAsset(assetPath);
+    if (decoded is! List<Object?>) {
+      throw FormatException('Unexpected top50 JSON structure. assetPath=$assetPath, expected=List<Map>');
+    }
 
-    return rows
-        .map((Map<String, Object?> item) => item['ticker'])
+    return decoded
+        .whereType<Map>()
+        .map((Map<Object?, Object?> row) => Map<String, Object?>.from(row))
+        .map((Map<String, Object?> row) => row['ticker'])
         .whereType<String>()
         .where((String ticker) => ticker.trim().isNotEmpty)
         .toList();
   }
 
-  Future<dynamic> loadYearData({
+  Future<Object?> loadYearData({
     required String market,
     required String ticker,
     required int year,
   }) async {
     _validateMarket(market);
 
-    final String assetPath = 'assets/prices/$market/$ticker/$year.json.gz';
+    final String assetPath = 'assets/prices/${market}_${ticker}_$year.json.gz';
     final List<String> assets = await _assetIndex.listPriceAssets();
     if (!assets.contains(assetPath)) {
       throw StateError(
@@ -60,38 +62,16 @@ class Top50Repository {
     print('[debugScanAssets] KR top50 tickers=${krTickers.length}, US top50 tickers=${usTickers.length}');
 
     if (krTickers.isNotEmpty) {
-      final dynamic kr2005 = await loadYearData(market: 'KR', ticker: krTickers.first, year: 2005);
+      final Object? kr2005 = await loadYearData(market: 'KR', ticker: krTickers.first, year: 2005);
       final int length = kr2005 is List<Object?> ? kr2005.length : -1;
       print('[debugScanAssets] KR first ticker=${krTickers.first}, 2005 load success=true, length=$length');
     }
 
     if (usTickers.isNotEmpty) {
-      final dynamic us2005 = await loadYearData(market: 'US', ticker: usTickers.first, year: 2005);
+      final Object? us2005 = await loadYearData(market: 'US', ticker: usTickers.first, year: 2005);
       final int length = us2005 is List<Object?> ? us2005.length : -1;
       print('[debugScanAssets] US first ticker=${usTickers.first}, 2005 load success=true, length=$length');
     }
-  }
-
-  List<Map<String, Object?>> _extractMetaRows(Object? metaObject) {
-    if (metaObject is List<Object?>) {
-      return metaObject
-          .whereType<Map>()
-          .map((Map<Object?, Object?> row) => Map<String, Object?>.from(row))
-          .toList();
-    }
-
-    if (metaObject is Map<Object?, Object?>) {
-      final Map<String, Object?> mapObject = Map<String, Object?>.from(metaObject);
-      final Object? listCandidate = mapObject['items'] ?? mapObject['data'] ?? mapObject['results'];
-      if (listCandidate is List<Object?>) {
-        return listCandidate
-            .whereType<Map>()
-            .map((Map<Object?, Object?> row) => Map<String, Object?>.from(row))
-            .toList();
-      }
-    }
-
-    throw FormatException('Unexpected top50 JSON structure: expected list of objects');
   }
 
   void _validateMarket(String market) {

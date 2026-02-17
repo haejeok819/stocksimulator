@@ -46,3 +46,21 @@ final Object? yearData = await top50Repository.loadYearData(
 Added files:
 - `lib/data/assets/price_asset_index.dart`
 - `lib/data/prices/top50_repository.dart`
+
+## Flat price asset structure (refactor target)
+
+```text
+assets/prices/KR_top50_meta.json
+assets/prices/US_top50_meta.json
+assets/prices/KR_{ticker}_{year}.json.gz
+assets/prices/US_{ticker}_{year}.json.gz
+```
+
+### pubspec.yaml (required assets section)
+
+```yaml
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/prices/
+```
