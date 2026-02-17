@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
-import 'package:stocksimulator/features/sim/screens/investment_input_screen.dart';
+import 'package:stocksimulator/features/sim/screens/invest_mode_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/date_card.dart';
 import 'package:stocksimulator/features/sim/widgets/date_picker_modal.dart';
@@ -237,7 +237,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> with SingleTickerProv
                                   widget.flowState.setDateRange(_startDate, _endDate);
                                   Navigator.of(context).push(
                                     buildRightSlideRoute(
-                                      InvestmentInputScreen(
+                                      InvestModeScreen(
                                         repository: widget.repository,
                                         flowState: widget.flowState,
                                       ),
