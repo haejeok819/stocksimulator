@@ -3,6 +3,7 @@
         android:label="stocksimulator"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        android:value="ca-app-pub-3940256099942544~3347511713"
         <activity
             android:name=".MainActivity"
             android:exported="true"

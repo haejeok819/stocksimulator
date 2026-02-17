@@ -25,7 +25,7 @@ class PriceFileDataSource {
 
     if (bytes != null) {
       await _cache.write(cacheKey, bytes);
-      final List<int> decoded = const GZipCodec().decode(bytes);
+      final List<int> decoded = GZipCodec().decode(bytes);
       final Map<String, dynamic> jsonMap = jsonDecode(utf8.decode(decoded)) as Map<String, dynamic>;
       return PriceYearData.fromJson(jsonMap);
     }
