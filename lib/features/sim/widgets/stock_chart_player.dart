@@ -60,12 +60,12 @@ class _SlidingChartPainter extends CustomPainter {
 
     final Paint upPaint = Paint()
       ..color = AppColors.upSegment
-      ..strokeWidth = 3
+      ..strokeWidth = 2.8
       ..style = PaintingStyle.stroke;
 
     final Paint downPaint = Paint()
       ..color = AppColors.downSegment
-      ..strokeWidth = 3
+      ..strokeWidth = 2.8
       ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < values.length - 1; i++) {
@@ -86,7 +86,7 @@ class _SlidingChartPainter extends CustomPainter {
       chartRect.bottom - ((last.value - minValue) / range) * chartRect.height,
     );
 
-    final double glowRadius = 8 + 8 * pulse;
+    final double glowRadius = 6 + 6 * pulse;
     canvas.drawCircle(
       lastPoint,
       glowRadius,
