@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -36,13 +37,15 @@ class _BattlePoint {
   final double returnB;
 }
 
-class _BattleScreenState extends ConsumerState<BattleScreen> {
+class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerProviderStateMixin {
   final StockRepository _repository = StockRepository();
   final GlobalKey _resultKey = GlobalKey();
 
   _BattleStage _stage = _BattleStage.setup;
   List<_BattlePoint> _points = <_BattlePoint>[];
-  Timer? _ticker;
+  Timer? _countdownTimer;
+  Ticker? _playbackTicker;
+  Duration? _lastTick;
   int _countdown = 0;
   double _speed = 1;
   bool _pendingFrameUpdate = false;
@@ -51,10 +54,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   BattleRunStatus _playStatus = BattleRunStatus.ready;
   final ValueNotifier<int> _progressIndex = ValueNotifier<int>(0);
   final ValueNotifier<_BattlePoint?> _currentPoint = ValueNotifier<_BattlePoint?>(null);
+  List<double> _seriesA = <double>[];
+  List<double> _seriesB = <double>[];
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _countdownTimer?.cancel();
+    _playbackTicker?.dispose();
     _progressIndex.dispose();
     _currentPoint.dispose();
     super.dispose();
@@ -168,7 +174,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   Future<void> _startBattle() async {
-    _ticker?.cancel();
+    _countdownTimer?.cancel();
+    _playbackTicker?.dispose();
+    _playbackTicker = null;
     _isPlaying = false;
     _playStatus = BattleRunStatus.ready;
     final BattleSetupState setup = ref.read(battleSetupProvider);
@@ -225,6 +233,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           .toList();
 
       _points = points;
+      _seriesA = points.map((e) => e.valueA).toList(growable: false);
+      _seriesB = points.map((e) => e.valueB).toList(growable: false);
       _playStatus = BattleRunStatus.ready;
       _isPlaying = false;
       _progressIndex.value = 0;
@@ -240,8 +250,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   void _runCountdown() {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       if (!mounted) return;
       if (_countdown <= 1) {
         timer.cancel();
@@ -256,18 +266,28 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   void _startPlayback() {
     _playStatus = BattleRunStatus.running;
     _isPlaying = true;
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(milliseconds: 32), (Timer timer) {
-      if (!mounted || !_isPlaying || _playStatus != BattleRunStatus.running) {
+    _lastTick = null;
+    _playbackTicker?.dispose();
+    _playbackTicker = createTicker((Duration elapsed) {
+      if (!_isPlaying || _playStatus != BattleRunStatus.running || !mounted) {
         return;
       }
+
+      final Duration previous = _lastTick ?? elapsed;
+      final int deltaMs = (elapsed - previous).inMilliseconds;
+      _lastTick = elapsed;
+      if (deltaMs <= 0) {
+        return;
+      }
+
       _scheduleFrameUpdate(() {
         if (!_isPlaying || _playStatus != BattleRunStatus.running) {
           return;
         }
 
-        final int step = _speed == 1 ? 1 : (_speed == 2 ? 2 : 4);
         final int currentIndex = _progressIndex.value;
+        final double baseSteps = deltaMs / 32.0;
+        final int step = max(1, (baseSteps * _speed).round());
         final int next = min(currentIndex + step, _points.length - 1);
         if (next == currentIndex) {
           return;
@@ -279,11 +299,12 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
         if (next >= _points.length - 1) {
           _isPlaying = false;
           _playStatus = BattleRunStatus.finished;
-          timer.cancel();
+          _playbackTicker?.stop();
           _finishBattle();
         }
       });
     });
+    _playbackTicker?.start();
   }
 
   Future<void> _finishBattle() async {
@@ -368,7 +389,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   Future<void> _skipToResult() async {
     _isPlaying = false;
     _playStatus = BattleRunStatus.finished;
-    _ticker?.cancel();
+    _countdownTimer?.cancel();
+    _playbackTicker?.dispose();
+    _playbackTicker = null;
     final InterstitialAd? ad = await AdHelper.loadInterstitial();
     if (ad == null) {
       _finishBattle();
@@ -568,8 +591,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
                   valueListenable: _progressIndex,
                   builder: (_, int progress, __) {
                     return BattleLineChart(
-                      seriesA: _points.map((e) => e.valueA).toList(),
-                      seriesB: _points.map((e) => e.valueB).toList(),
+                      seriesA: _seriesA,
+                      seriesB: _seriesB,
                       progress: progress,
                     );
                   },
@@ -587,15 +610,16 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
-              DropdownButton<double>(
-                value: _speed,
-                items: const <DropdownMenuItem<double>>[
-                  DropdownMenuItem(value: 1, child: Text('1x')),
-                  DropdownMenuItem(value: 2, child: Text('2x')),
-                  DropdownMenuItem(value: 4, child: Text('4x')),
-                ],
-                onChanged: (double? v) => setState(() => _speed = v ?? 1),
-              ),
+              if (!(Platform.isWindows && _isPlaying))
+                DropdownButton<double>(
+                  value: _speed,
+                  items: const <DropdownMenuItem<double>>[
+                    DropdownMenuItem(value: 1, child: Text('1x')),
+                    DropdownMenuItem(value: 2, child: Text('2x')),
+                    DropdownMenuItem(value: 4, child: Text('4x')),
+                  ],
+                  onChanged: (double? v) => setState(() => _speed = v ?? 1),
+                ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () {
