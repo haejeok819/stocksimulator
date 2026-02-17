@@ -54,7 +54,6 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   Timer? _countdownTimer;
   Timer? _playbackTimer;
   Timer? _pendingStartTimer;
-  int _tickCounter = 0;
 
   bool get _safeMode => ref.read(battleSetupProvider).safeMode;
 
@@ -62,7 +61,6 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     _countdownTimer?.cancel();
     _playbackTimer?.cancel();
     _pendingStartTimer?.cancel();
-    _tickCounter = 0;
     state = state.copyWith(status: BattlePlaybackStatus.ready, index: 0, showCountdown: false, countdown: 0);
   }
 
@@ -89,7 +87,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   }
 
   void setSpeed(double speed) {
-    state = state.copyWith(speed: speed.clamp(1, 5).toDouble());
+    state = state.copyWith(speed: speed.clamp(1, 8).toDouble());
     if (state.status == BattlePlaybackStatus.running) {
       _playbackTimer?.cancel();
       _runPlayback();
@@ -117,29 +115,34 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     state = state.copyWith(index: end, status: BattlePlaybackStatus.ended, showCountdown: false, countdown: 0);
   }
 
+  int _playbackTickMs() => _safeMode ? 42 : 32;
+
+  int _baseStepSize(int length) {
+    if (length <= 252) {
+      return _safeMode ? 2 : 1;
+    }
+    if (length <= 1260) {
+      return _safeMode ? 6 : 4;
+    }
+    return _safeMode ? 16 : 10;
+  }
+
   void _runPlayback() {
     final BattleSeriesData? data = ref.read(battleDataProvider).valueOrNull;
     if (data == null || data.length <= 1) return;
 
-    final int intervalMs = _safeMode ? 160 : 32;
-    final int step = _safeMode ? max(1, state.speed.round()) : max(1, state.speed.round());
+    final int speedMultiplier = state.speed.round().clamp(1, 8);
+    final int step = (_baseStepSize(data.length) * speedMultiplier).clamp(1, 240);
 
     state = state.copyWith(status: BattlePlaybackStatus.running, showCountdown: false);
     _playbackTimer?.cancel();
     _pendingStartTimer?.cancel();
-    _tickCounter = 0;
 
     void launch() {
-      _playbackTimer = Timer.periodic(Duration(milliseconds: intervalMs), (Timer timer) {
+      _playbackTimer = Timer.periodic(Duration(milliseconds: _playbackTickMs()), (Timer timer) {
         final int next = min(state.index + step, data.length - 1);
         final bool ended = next >= data.length - 1;
-        _tickCounter += 1;
-
-        if (!_safeMode || _tickCounter % 2 == 0 || ended) {
-          state = state.copyWith(index: next, status: ended ? BattlePlaybackStatus.ended : BattlePlaybackStatus.running);
-        } else {
-          state = state.copyWith(index: next);
-        }
+        state = state.copyWith(index: next, status: ended ? BattlePlaybackStatus.ended : BattlePlaybackStatus.running);
 
         if (ended) {
           timer.cancel();
@@ -149,7 +152,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     }
 
     if (_safeMode) {
-      _pendingStartTimer = Timer(const Duration(milliseconds: 350), launch);
+      _pendingStartTimer = Timer(const Duration(milliseconds: 220), launch);
     } else {
       launch();
     }
@@ -165,6 +168,6 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
 }
 
 final battlePlaybackControllerProvider =
-StateNotifierProvider.autoDispose<BattlePlaybackController, BattlePlaybackState>(
+    StateNotifierProvider.autoDispose<BattlePlaybackController, BattlePlaybackState>(
       (ref) => BattlePlaybackController(ref),
-);
+    );

@@ -45,7 +45,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   @override
   void initState() {
     super.initState();
-    _speed = _isWindowsDesktop ? 4 : 1;
+    _speed = 1;
     AdService.instance.preloadInterstitial();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
