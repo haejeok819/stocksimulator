@@ -19,24 +19,24 @@ class DateRangeScreen extends StatefulWidget {
 }
 
 class _DateRangeScreenState extends State<DateRangeScreen> {
-  static const int _totalDays = 90;
+  static const int _totalDays = 3650;
   static const int _minRangeDays = 30;
 
+  late final DateTime _baseDate;
   late RangeValues _values;
 
   @override
   void initState() {
     super.initState();
-    _values = RangeValues(
-      widget.flowState.startIndex.toDouble(),
-      widget.flowState.endIndex.toDouble(),
-    );
+    _baseDate = DateTime.now().subtract(const Duration(days: _totalDays - 1));
+    final int startIndex = widget.flowState.startDate.difference(_baseDate).inDays.clamp(0, _totalDays - 1);
+    final int endIndex = widget.flowState.endDate.difference(_baseDate).inDays.clamp(0, _totalDays - 1);
+    _values = RangeValues(startIndex.toDouble(), endIndex.toDouble());
   }
 
-  String _labelForIndex(int index) {
-    final DateTime date = DateTime.now().subtract(
-      Duration(days: _totalDays - 1 - index),
-    );
+  DateTime _dateForIndex(int index) => _baseDate.add(Duration(days: index));
+
+  String _labelForDate(DateTime date) {
     final String month = date.month.toString().padLeft(2, '0');
     final String day = date.day.toString().padLeft(2, '0');
     return '${date.year}.$month.$day';
@@ -61,6 +61,8 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
   Widget build(BuildContext context) {
     final int startIndex = _values.start.toInt();
     final int endIndex = _values.end.toInt();
+    final DateTime startDate = _dateForIndex(startIndex);
+    final DateTime endDate = _dateForIndex(endIndex);
 
     return Scaffold(
       appBar: AppBar(title: const Text('날짜 선택')),
@@ -72,9 +74,9 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
             children: <Widget>[
               const Text('백테스트 기간을 선택하세요 (최소 30거래일).'),
               const SizedBox(height: 20),
-              Text('시작 날짜: ${_labelForIndex(startIndex)}'),
+              Text('시작 날짜: ${_labelForDate(startDate)}'),
               const SizedBox(height: 6),
-              Text('종료 날짜: ${_labelForIndex(endIndex)}'),
+              Text('종료 날짜: ${_labelForDate(endDate)}'),
               const SizedBox(height: 8),
               Text('선택 구간: ${endIndex - startIndex + 1} 거래일'),
               const SizedBox(height: 24),
@@ -86,8 +88,8 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
                     max: (_totalDays - 1).toDouble(),
                     divisions: _totalDays - 1,
                     labels: RangeLabels(
-                      _labelForIndex(startIndex),
-                      _labelForIndex(endIndex),
+                      _labelForDate(startDate),
+                      _labelForDate(endDate),
                     ),
                     onChanged: (RangeValues values) {
                       setState(() {
@@ -99,7 +101,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  widget.flowState.setRange(startIndex, endIndex);
+                  widget.flowState.setDateRange(startDate, endDate);
                   Navigator.of(context).push(
                     buildRightSlideRoute(
                       InvestmentInputScreen(

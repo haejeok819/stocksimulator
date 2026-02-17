@@ -8,18 +8,20 @@ class SimulationFlowState {
 
   StockModel? selectedStock;
 
-  int get startIndex => _cache.startIndex;
-  int get endIndex => _cache.endIndex;
+  DateTime get startDate => _cache.startDate;
+  DateTime get endDate => _cache.endDate;
   int get investment => _cache.investment;
+  String get marketCode => _cache.selectedMarket;
 
   void selectStock(StockModel stock) {
     selectedStock = stock;
     _cache.selectedSymbol = stock.symbol;
+    _cache.selectedMarket = stock.market == StockMarket.kr ? 'KR' : 'US';
   }
 
-  void setRange(int start, int end) {
-    _cache.startIndex = start;
-    _cache.endIndex = end;
+  void setDateRange(DateTime start, DateTime end) {
+    _cache.startDate = start;
+    _cache.endDate = end;
   }
 
   void setInvestment(int amount) {

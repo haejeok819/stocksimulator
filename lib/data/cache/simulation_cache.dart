@@ -1,6 +1,7 @@
 class SimulationCache {
   String? selectedSymbol;
-  int startIndex = 10;
-  int endIndex = 70;
+  String selectedMarket = 'KR';
+  DateTime startDate = DateTime.now().subtract(const Duration(days: 89));
+  DateTime endDate = DateTime.now();
   int investment = 1000000;
 }

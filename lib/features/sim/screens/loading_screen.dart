@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/chart_playback_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
@@ -26,8 +27,14 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _prepareDataAndMove() async {
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    final List<double> prices = widget.repository.getChartPrices();
+    final List<SimulationPoint> series = await widget.repository.loadSimulationSeries(
+      market: widget.flowState.marketCode,
+      ticker: widget.flowState.selectedStock?.symbol ?? 'UNKNOWN',
+      start: widget.flowState.startDate,
+      end: widget.flowState.endDate,
+      investment: widget.flowState.investment,
+    );
+
     if (!mounted) {
       return;
     }
@@ -35,7 +42,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
     Navigator.of(context).push(
       buildRightSlideRoute(
         ChartPlaybackScreen(
-          prices: prices,
+          points: series,
           flowState: widget.flowState,
         ),
       ),
