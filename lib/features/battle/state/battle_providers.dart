@@ -149,8 +149,10 @@ class BattleTick {
   final double returnB;
 }
 
-final FutureProvider.autoDispose<BattleSeriesData> battleDataProvider = FutureProvider.autoDispose<BattleSeriesData>((Ref ref) async {
-  final BattleSetupState setup = ref.watch(battleSetupProvider);
+final battleDataProvider =
+FutureProvider.autoDispose<BattleSeriesData>((ref) async {
+  final setup = ref.watch(battleSetupProvider);
+
   if (setup.stockA == null || setup.stockB == null) {
     throw StateError('종목 A/B를 먼저 선택하세요.');
   }

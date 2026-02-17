@@ -31,12 +31,7 @@ class BattleChart extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final int length = min(seriesA.length, min(seriesB.length, dates.length));
-    if (length < 2) {
-      return const SizedBox.shrink();
-    }
-
-    final int safeIndex = playbackIndex.clamp(0, length - 1);
+    final int safeIndex = playbackIndex.clamp(0, seriesA.length - 1);
 
     double minY = min(seriesA.reduce(min), seriesB.reduce(min));
     double maxY = max(seriesA.reduce(max), seriesB.reduce(max));
@@ -90,7 +85,7 @@ class _BattleChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final int length = min(seriesA.length, min(seriesB.length, dates.length));
+    final int length = min(seriesA.length, seriesB.length);
     if (length < 2) return;
 
     const double yAxisWidth = 64;

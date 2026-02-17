@@ -164,7 +164,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   }
 }
 
-final StateNotifierProvider.autoDispose<BattlePlaybackController, BattlePlaybackState> battlePlaybackControllerProvider =
-    StateNotifierProvider.autoDispose<BattlePlaybackController, BattlePlaybackState>(
-  (Ref ref) => BattlePlaybackController(ref),
+final battlePlaybackControllerProvider =
+StateNotifierProvider.autoDispose<BattlePlaybackController, BattlePlaybackState>(
+      (ref) => BattlePlaybackController(ref),
 );

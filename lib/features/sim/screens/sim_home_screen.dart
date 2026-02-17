@@ -53,85 +53,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     });
   }
 
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
 
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
-
-  bool get _safeMode {
-    if (kIsWeb) return true;
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
-      _ => false,
-    };
-  }
 
   @override
   void dispose() {
@@ -321,6 +243,7 @@ class _MarketToggle extends StatelessWidget {
                 color: const Color(0xFF5677E7),
                 borderRadius: BorderRadius.circular(999),
               ),
+              // child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
           ),
           ),
