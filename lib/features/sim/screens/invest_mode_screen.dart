@@ -129,11 +129,24 @@ class _InvestModeScreenState extends State<InvestModeScreen> with TickerProvider
                 ),
               ],
             ),
-            AnimatedSize(
+            AnimatedSwitcher(
               duration: _isSafeMode ? Duration.zero : const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeOutCubic,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                if (_isSafeMode) return child;
+                return FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
+                );
+              },
               child: isDca
                   ? Padding(
+                      key: const ValueKey<String>('dca-options'),
                       padding: const EdgeInsets.only(top: 12),
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
@@ -145,7 +158,7 @@ class _InvestModeScreenState extends State<InvestModeScreen> with TickerProvider
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            const Text('적립 주기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                            const Text('적립 주기', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                             const SizedBox(height: 8),
                             _IntervalPillSelector(
                               selected: widget.flowState.dcaInterval,
@@ -169,7 +182,7 @@ class _InvestModeScreenState extends State<InvestModeScreen> with TickerProvider
                         ),
                       ),
                     )
-                  : const SizedBox.shrink(),
+                  : const SizedBox(key: ValueKey<String>('dca-options-empty')),
             ),
             const SizedBox(height: 14),
             _SummaryCard(
@@ -406,7 +419,7 @@ class _SummaryCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              const Text('요약', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+              const Text('요약', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.2)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -415,7 +428,7 @@ class _SummaryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(99),
                   border: Border.all(color: const Color(0x555678E7)),
                 ),
-                child: Text(modePillText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFDCE5FF))),
+                child: Text(modePillText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFFE6EEFF))),
               ),
             ],
           ),
@@ -427,7 +440,7 @@ class _SummaryCard extends StatelessWidget {
             valueWidget: Text.rich(
               TextSpan(
                 text: stockName,
-                style: const TextStyle(fontSize: 14, color: Color(0xFFE6FFFFFF), fontWeight: FontWeight.w700),
+                style: const TextStyle(fontSize: 16, color: Color(0xFFF2F6FF), fontWeight: FontWeight.w800),
                 children: <InlineSpan>[
                   TextSpan(text: ' ($ticker)', style: const TextStyle(color: Color(0xFFB5B5BE), fontWeight: FontWeight.w500)),
                 ],
@@ -454,16 +467,16 @@ class _SummaryCard extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  const Text('예상 회차 수', style: TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+                  const Text('예상 회차 수', style: TextStyle(fontSize: 13, color: Color(0xFFAEB0B8), fontWeight: FontWeight.w600)),
                   const Spacer(),
-                  Text('$eventCount회', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFFE9F0FF))),
+                  Text('$eventCount회', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFFF3F7FF))),
                 ],
               ),
             ),
           ] else ...<Widget>[
             const Align(
               alignment: Alignment.centerRight,
-              child: Text('총 1회 투자', style: TextStyle(fontSize: 12, color: Color(0xFF7E7E87))),
+              child: Text('총 1회 투자', style: TextStyle(fontSize: 13, color: Color(0xFF8C8D97), fontWeight: FontWeight.w600)),
             ),
           ],
         ],
@@ -494,7 +507,7 @@ class _SummaryRow extends StatelessWidget {
           child: valueText != null
               ? Text(
                   valueText!,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFE6FFFFFF)),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFFF2F6FF)),
                   textAlign: TextAlign.right,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
