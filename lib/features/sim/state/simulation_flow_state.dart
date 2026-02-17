@@ -1,6 +1,10 @@
 import 'package:stocksimulator/data/cache/simulation_cache.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 
+enum InvestMode { lumpSum, dca }
+
+enum DcaInterval { monthly, weekly, tradingDaily }
+
 class SimulationFlowState {
   SimulationFlowState({SimulationCache? cache}) : _cache = cache ?? SimulationCache();
 
@@ -12,6 +16,10 @@ class SimulationFlowState {
   DateTime get endDate => _cache.endDate;
   int get investment => _cache.investment;
   String get marketCode => _cache.selectedMarket;
+
+  InvestMode investMode = InvestMode.lumpSum;
+  DcaInterval dcaInterval = DcaInterval.monthly;
+  int dcaAmountPerTrade = 100000;
 
   void selectStock(StockModel stock) {
     selectedStock = stock;
@@ -26,5 +34,17 @@ class SimulationFlowState {
 
   void setInvestment(int amount) {
     _cache.investment = amount;
+  }
+
+  void setInvestMode(InvestMode mode) {
+    investMode = mode;
+  }
+
+  void setDcaInterval(DcaInterval interval) {
+    dcaInterval = interval;
+  }
+
+  void setDcaAmountPerTrade(int amount) {
+    dcaAmountPerTrade = amount;
   }
 }

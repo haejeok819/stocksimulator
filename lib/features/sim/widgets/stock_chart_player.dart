@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class StockChartPlayer extends StatelessWidget {
   const StockChartPlayer({
@@ -60,12 +61,12 @@ class _SlidingChartPainter extends CustomPainter {
 
     final Paint upPaint = Paint()
       ..color = AppColors.upSegment
-      ..strokeWidth = 3
+      ..strokeWidth = 2.8
       ..style = PaintingStyle.stroke;
 
     final Paint downPaint = Paint()
       ..color = AppColors.downSegment
-      ..strokeWidth = 3
+      ..strokeWidth = 2.8
       ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < values.length - 1; i++) {
@@ -86,7 +87,7 @@ class _SlidingChartPainter extends CustomPainter {
       chartRect.bottom - ((last.value - minValue) / range) * chartRect.height,
     );
 
-    final double glowRadius = 8 + 8 * pulse;
+    final double glowRadius = 6 + 6 * pulse;
     canvas.drawCircle(
       lastPoint,
       glowRadius,
@@ -109,7 +110,7 @@ class _SlidingChartPainter extends CustomPainter {
 
       final TextPainter tp = TextPainter(
         text: TextSpan(
-          text: _compact(value),
+          text: AppNumberFormat.formatInt(value),
           style: const TextStyle(color: AppColors.helperText, fontSize: 11),
         ),
         textDirection: TextDirection.ltr,
@@ -118,15 +119,6 @@ class _SlidingChartPainter extends CustomPainter {
     }
   }
 
-  String _compact(double value) {
-    if (value.abs() >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    if (value.abs() >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-    return value.toStringAsFixed(0);
-  }
 
   @override
   bool shouldRepaint(covariant _SlidingChartPainter oldDelegate) {
