@@ -39,7 +39,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
       return;
     }
 
-    Navigator.of(context).push(
+    Navigator.of(context).pushReplacement(
       buildRightSlideRoute(
         ChartPlaybackScreen(
           points: series,

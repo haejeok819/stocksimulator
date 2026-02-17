@@ -137,8 +137,30 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       return;
     }
     _resultShown = true;
+    _skipTimer?.cancel();
 
     if (widget.points.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('데이터 없음'),
+            content: const Text('선택한 기간에 대한 데이터를 찾을 수 없습니다.'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
