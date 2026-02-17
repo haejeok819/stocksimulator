@@ -4,6 +4,7 @@ import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/chart_playback_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/features/sim/utils/dca_schedule.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class LoadingScreen extends StatefulWidget {
@@ -35,10 +36,31 @@ class _LoadingScreenState extends State<LoadingScreen> {
         start: widget.flowState.startDate,
         end: widget.flowState.endDate,
       );
-      final List<SimulationPoint> series = widget.repository.toSimulationSeries(
-        prices: prices,
-        investment: widget.flowState.investment,
-      );
+      final List<SimulationPoint> series;
+      if (widget.flowState.investMode == InvestMode.lumpSum) {
+        series = widget.repository.toSimulationSeries(
+          prices: prices,
+          investment: widget.flowState.investment,
+        );
+      } else {
+        final List<int> tradingDays = await widget.repository.loadTradingDaysYmd(
+          market: widget.flowState.marketCode,
+          ticker: widget.flowState.selectedStock?.ticker ?? '',
+        );
+        final List<int> events = buildDcaEventYmds(
+          tradingDaysSorted: tradingDays,
+          start: widget.flowState.startDate,
+          end: widget.flowState.endDate,
+          interval: widget.flowState.dcaInterval,
+        );
+        final Map<int, int> investEventsByYmd = <int, int>{
+          for (final int ymd in events) ymd: widget.flowState.dcaAmountPerTrade,
+        };
+        series = widget.repository.toSimulationSeriesWithEvents(
+          prices: prices,
+          investEventsByYmd: investEventsByYmd,
+        );
+      }
 
       if (!mounted) {
         return;
