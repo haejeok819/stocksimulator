@@ -109,6 +109,14 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     };
   }
 
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
   @override
   void dispose() {
     _placeholderTimer?.cancel();
