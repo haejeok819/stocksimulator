@@ -64,7 +64,7 @@ class _BattleLineChartPainter extends CustomPainter {
     final Paint bPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
-      ..color = const Color(0xFFF59E0B);
+      ..color = const Color(0xFFE54B4B);
 
     final Path aPath = Path();
     final Path bPath = Path();
