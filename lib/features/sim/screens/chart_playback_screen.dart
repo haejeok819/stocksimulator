@@ -1,0 +1,346 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:stocksimulator/data/models/simulation_point.dart';
+import 'package:stocksimulator/data/models/simulation_result.dart';
+import 'package:stocksimulator/data/repositories/history_repository.dart';
+import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
+import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/utils/app_settings.dart';
+
+class ChartPlaybackScreen extends StatefulWidget {
+  const ChartPlaybackScreen({
+    super.key,
+    required this.points,
+    required this.flowState,
+  });
+
+  final List<SimulationPoint> points;
+  final SimulationFlowState flowState;
+
+  @override
+  State<ChartPlaybackScreen> createState() => _ChartPlaybackScreenState();
+}
+
+class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
+  final HistoryRepository _historyRepository = HistoryRepository();
+
+  Timer? _ticker;
+  Timer? _skipTimer;
+  bool _resultShown = false;
+  bool _showSkip = false;
+
+  int _index = 0;
+  double _accumulated = 0;
+  double _pulseTime = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startPlayback();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _skipTimer?.cancel();
+    super.dispose();
+  }
+
+  double get _stepPerTick {
+    final double years = widget.flowState.endDate.difference(widget.flowState.startDate).inDays / 365;
+    if (years < 1) {
+      return 0.016 / 0.2;
+    }
+    if (years < 5) {
+      return 0.016 / 0.05;
+    }
+    return 0.016 / 0.01;
+  }
+
+  void _startPlayback() {
+    if (widget.points.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showResult());
+      return;
+    }
+
+    _skipTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _showSkip = true;
+        });
+      }
+    });
+
+    _ticker = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _pulseTime += 0.16;
+        if (AppSettings.chartMotionEnabled.value) {
+          _accumulated += _stepPerTick;
+          final int step = _accumulated.floor();
+          if (step > 0) {
+            _accumulated -= step;
+            _index = min(_index + step, widget.points.length - 1);
+          }
+        } else {
+          _index = min(_index + 1, widget.points.length - 1);
+        }
+      });
+
+      if (_index >= widget.points.length - 1) {
+        _ticker?.cancel();
+        _showResult();
+      }
+    });
+  }
+
+  Future<void> _onSkipPressed() async {
+    _ticker?.cancel();
+
+    final InterstitialAd? ad = await AdHelper.loadInterstitial();
+    if (ad == null) {
+      _showResult();
+      return;
+    }
+
+    final Completer<void> completer = Completer<void>();
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (InterstitialAd ad) {
+        ad.dispose();
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      },
+      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+        ad.dispose();
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      },
+    );
+
+    ad.show();
+    await completer.future;
+
+    _showResult();
+  }
+
+  Future<void> _showResult() async {
+    if (_resultShown) {
+      return;
+    }
+    _resultShown = true;
+
+    if (widget.points.isEmpty) {
+      return;
+    }
+
+    final int finalAmount = widget.points.last.value.round();
+    final int profit = finalAmount - widget.flowState.investment;
+    final double profitRate = (profit / widget.flowState.investment) * 100;
+
+    await _historyRepository.append(
+      SimulationResult(
+        ticker: widget.flowState.selectedStock?.symbol ?? '',
+        startYmd: widget.points.first.ymd,
+        endYmd: widget.points.last.ymd,
+        amount: finalAmount,
+        profitRate: profitRate,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return _ResultDialog(
+          initialAmount: widget.flowState.investment,
+          finalAmount: finalAmount,
+          profit: profit,
+          profitRate: profitRate,
+          onRestart: () {
+            Navigator.of(context).pop();
+            Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst);
+          },
+          onClose: () {
+            Navigator.of(context).pop();
+          },
+        );
+      },
+    );
+  }
+
+  String _formatYmd(int ymd) {
+    final String raw = ymd.toString();
+    if (raw.length != 8) {
+      return raw;
+    }
+    return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasData = widget.points.isNotEmpty;
+    final SimulationPoint current = hasData
+        ? widget.points[_index]
+        : const SimulationPoint(ymd: 0, close: 0, value: 0);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.flowState.selectedStock?.name ?? '차트'} 재생'),
+        actions: <Widget>[
+          if (_showSkip)
+            TextButton(
+              onPressed: _onSkipPressed,
+              child: const Text('스킵'),
+            ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(
+              _formatYmd(current.ymd),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${current.value.toStringAsFixed(0)}',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            Text(
+              '종가 ${current.close.toStringAsFixed(2)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF24242D),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: AppSettings.chartMotionEnabled,
+                    builder: (BuildContext context, bool motionOn, _) {
+                      return StockChartPlayer(
+                        points: widget.points,
+                        currentIndex: _index,
+                        pulse: motionOn ? (sin(_pulseTime) + 1) / 2 : 0,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('최근 30거래일 슬라이딩 윈도우 차트'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultDialog extends StatefulWidget {
+  const _ResultDialog({
+    required this.initialAmount,
+    required this.finalAmount,
+    required this.profit,
+    required this.profitRate,
+    required this.onRestart,
+    required this.onClose,
+  });
+
+  final int initialAmount;
+  final int finalAmount;
+  final int profit;
+  final double profitRate;
+  final VoidCallback onRestart;
+  final VoidCallback onClose;
+
+  @override
+  State<_ResultDialog> createState() => _ResultDialogState();
+}
+
+class _ResultDialogState extends State<_ResultDialog> {
+  BannerAd? _banner;
+  bool _bannerReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _banner = AdHelper.createBannerAd(
+      listener: BannerAdListener(
+        onAdLoaded: (Ad ad) {
+          if (mounted) {
+            setState(() {
+              _bannerReady = true;
+            });
+          }
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _banner?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('시뮬레이션 결과'),
+      content: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 1200),
+        builder: (BuildContext context, double t, _) {
+          final int finalAmount = (widget.finalAmount * t).round();
+          final int profit = (widget.profit * t).round();
+          final double profitRate = widget.profitRate * t;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text('초기 투자금: ${widget.initialAmount} 원'),
+              const SizedBox(height: 6),
+              Text('최종 평가금: $finalAmount 원'),
+              const SizedBox(height: 6),
+              Text('수익금: $profit 원'),
+              const SizedBox(height: 6),
+              Text('수익률: ${profitRate.toStringAsFixed(2)}%'),
+              const SizedBox(height: 12),
+              if (_bannerReady && _banner != null)
+                SizedBox(
+                  width: _banner!.size.width.toDouble(),
+                  height: _banner!.size.height.toDouble(),
+                  child: AdWidget(ad: _banner!),
+                ),
+            ],
+          );
+        },
+      ),
+      actions: <Widget>[
+        TextButton(onPressed: widget.onClose, child: const Text('닫기')),
+        ElevatedButton(onPressed: widget.onRestart, child: const Text('다시하기')),
+      ],
+    );
+  }
+}
