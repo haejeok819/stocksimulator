@@ -66,7 +66,7 @@ class AssetIndexGenerator {
     try {
       final ByteData data = await rootBundle.load(path);
       final Uint8List bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final List<int> decoded = const GZipCodec().decode(bytes);
+      final List<int> decoded = GZipCodec().decode(bytes);
       return jsonDecode(utf8.decode(decoded));
     } catch (error) {
       throw FormatException('gzip/json parse failed. assetPath=$path, exception=$error');

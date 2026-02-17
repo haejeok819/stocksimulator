@@ -6,5 +6,5 @@ class AssetPaths {
 
   // Flat yearly gzip path (KR_{ticker}_{year}.json.gz / US_{ticker}_{year}.json.gz).
   static String assetPathYear(String market, String ticker, int year) =>
-      'assets/prices/${market}_$ticker_$year.json.gz';
+      'assets/prices/${market}_${ticker}_${year}.json.gz';
 }

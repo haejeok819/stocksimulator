@@ -39,7 +39,7 @@ class PriceAssetIndex {
     try {
       final ByteData data = await rootBundle.load(path);
       final Uint8List bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final List<int> unzipped = const GZipCodec().decode(bytes);
+      final List<int> unzipped = GZipCodec().decode(bytes);
       final String jsonString = utf8.decode(unzipped);
       return jsonDecode(jsonString);
     } catch (error) {

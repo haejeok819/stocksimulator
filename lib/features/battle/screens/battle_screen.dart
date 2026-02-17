@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -37,18 +38,17 @@ class _BattlePoint {
   final double returnB;
 }
 
-class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerProviderStateMixin {
+class _BattleScreenState extends ConsumerState<BattleScreen> {
   final StockRepository _repository = StockRepository();
   final GlobalKey _resultKey = GlobalKey();
 
   _BattleStage _stage = _BattleStage.setup;
   List<_BattlePoint> _points = <_BattlePoint>[];
   Timer? _countdownTimer;
-  Ticker? _playbackTicker;
-  Duration? _lastTick;
-  int _lastUiUpdateMs = 0;
   int _countdown = 0;
   double _speed = 1;
+  Timer? _playbackTimer;
+
   bool _finishing = false;
   bool _isPlaying = false;
   BattleRunStatus _playStatus = BattleRunStatus.ready;
@@ -60,7 +60,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _playbackTicker?.dispose();
+    _playbackTimer?.cancel();
     _progressIndex.dispose();
     _currentPoint.dispose();
     super.dispose();
@@ -161,8 +161,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
 
   Future<void> _startBattle() async {
     _countdownTimer?.cancel();
-    _playbackTicker?.dispose();
-    _playbackTicker = null;
+    _playbackTimer?.cancel();
     _isPlaying = false;
     _playStatus = BattleRunStatus.ready;
     final BattleSetupState setup = ref.read(battleSetupProvider);
@@ -252,51 +251,36 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
   void _startPlayback() {
     _playStatus = BattleRunStatus.running;
     _isPlaying = true;
-    _lastTick = null;
-    _lastUiUpdateMs = 0;
-    _playbackTicker?.dispose();
-    _playbackTicker = createTicker((Duration elapsed) {
-      if (!_isPlaying || _playStatus != BattleRunStatus.running || !mounted) {
-        return;
-      }
 
-      final Duration previous = _lastTick ?? elapsed;
-      final int deltaMs = (elapsed - previous).inMilliseconds;
-      _lastTick = elapsed;
-      if (deltaMs <= 0) {
-        return;
-      }
+    _playbackTimer?.cancel();
 
-      if (elapsed.inMilliseconds - _lastUiUpdateMs < 16) {
-        return;
-      }
-      _lastUiUpdateMs = elapsed.inMilliseconds;
+    _playbackTimer = Timer.periodic(
+      const Duration(milliseconds: 16),
+          (timer) {
+        if (!_isPlaying || _playStatus != BattleRunStatus.running) {
+          timer.cancel();
+          return;
+        }
 
-      final int currentIndex = _progressIndex.value;
-      final double baseSteps = deltaMs / 32.0;
-      final int step = max(1, (baseSteps * _speed).round());
-      final int next = min(currentIndex + step, _points.length - 1);
-      if (next == currentIndex) {
-        return;
-      }
+        final currentIndex = _progressIndex.value;
+        final step = max(1, _speed.round());
+        final next = min(currentIndex + step, _points.length - 1);
 
-      _progressIndex.value = next;
-      _currentPoint.value = _points[next];
+        if (next == currentIndex) return;
 
-      if (next >= _points.length - 1) {
-        _isPlaying = false;
-        _playStatus = BattleRunStatus.finished;
-        _playbackTicker?.stop();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) {
-            return;
-          }
+        _progressIndex.value = next;
+        _currentPoint.value = _points[next];
+
+        if (next >= _points.length - 1) {
+          timer.cancel();
+          _isPlaying = false;
+          _playStatus = BattleRunStatus.finished;
           _finishBattle();
-        });
-      }
-    });
-    _playbackTicker?.start();
+        }
+      },
+    );
   }
+
 
   Future<void> _finishBattle() async {
     if (_finishing) {
@@ -381,8 +365,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
     _isPlaying = false;
     _playStatus = BattleRunStatus.finished;
     _countdownTimer?.cancel();
-    _playbackTicker?.dispose();
-    _playbackTicker = null;
+    _playbackTimer?.cancel();
     final InterstitialAd? ad = await AdHelper.loadInterstitial();
     if (ad == null) {
       _finishBattle();
@@ -540,114 +523,107 @@ class _BattleScreenState extends ConsumerState<BattleScreen> with SingleTickerPr
   }
 
   Widget _buildPlayback(BattleSetupState setup) {
-    return IgnorePointer(
-      ignoring: _isPlaying,
+    if (_points.isEmpty || setup.stockA == null || setup.stockB == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SizedBox.expand(
       child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: <Widget>[
-          Visibility(
-            visible: _countdown > 0,
-            maintainState: true,
-            maintainAnimation: true,
-            maintainSize: true,
-            child: Text('$_countdown', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-          ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: ValueListenableBuilder<_BattlePoint?>(
-                  valueListenable: _currentPoint,
-                  builder: (_, _BattlePoint? point, __) {
-                    final _BattlePoint current = point ?? _points.first;
-                    final bool aLeading = current.valueA >= current.valueB;
-                    return _statusCard('A', setup.stockA!, current.valueA, current.returnA, aLeading);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ValueListenableBuilder<_BattlePoint?>(
-                  valueListenable: _currentPoint,
-                  builder: (_, _BattlePoint? point, __) {
-                    final _BattlePoint current = point ?? _points.first;
-                    final bool aLeading = current.valueA >= current.valueB;
-                    return _statusCard('B', setup.stockB!, current.valueB, current.returnB, !aLeading);
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 320,
-            child: RepaintBoundary(
-              child: Container(
-                decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.all(10),
-                child: BattleLineChart(
-                  seriesA: _seriesA,
-                  seriesB: _seriesB,
-                  progressListenable: _progressIndex,
-                ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: <Widget>[
+            Visibility(
+              visible: _countdown > 0,
+              maintainState: true,
+              maintainAnimation: true,
+              maintainSize: true,
+              child: Text(
+                '$_countdown',
+                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          ValueListenableBuilder<_BattlePoint?>(
-            valueListenable: _currentPoint,
-            builder: (_, _BattlePoint? point, __) {
-              return Text('날짜: ${point?.ymd ?? _points.first.ymd}');
-            },
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: <Widget>[
-              Visibility(
-                visible: !(Platform.isWindows && _isPlaying),
-                maintainState: true,
-                maintainAnimation: true,
-                maintainSize: true,
-                child: IgnorePointer(
-                  ignoring: Platform.isWindows && _isPlaying,
-                  child: DropdownButton<double>(
-                    value: _speed,
-                    items: const <DropdownMenuItem<double>>[
-                      DropdownMenuItem(value: 1, child: Text('1x')),
-                      DropdownMenuItem(value: 2, child: Text('2x')),
-                      DropdownMenuItem(value: 4, child: Text('4x')),
-                    ],
-                    onChanged: (double? v) => setState(() => _speed = v ?? 1),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: ValueListenableBuilder<_BattlePoint?>(
+                    valueListenable: _currentPoint,
+                    builder: (_, point, __) {
+                      final current = point ?? _points.first;
+                      final aLeading = current.valueA >= current.valueB;
+                      return _statusCard('A', setup.stockA!, current.valueA, current.returnA, aLeading);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ValueListenableBuilder<_BattlePoint?>(
+                    valueListenable: _currentPoint,
+                    builder: (_, point, __) {
+                      final current = point ?? _points.first;
+                      final aLeading = current.valueA >= current.valueB;
+                      return _statusCard('B', setup.stockB!, current.valueB, current.returnB, !aLeading);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 320,
+              child: RepaintBoundary(
+                child: Container(
+                  decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.all(10),
+                  child: BattleLineChart(
+                    seriesA: _seriesA,
+                    seriesB: _seriesB,
+                    progressListenable: _progressIndex,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  if (_playStatus == BattleRunStatus.running) {
-                    setState(() {
-                      _playStatus = BattleRunStatus.paused;
-                    });
-                    _playbackTicker?.stop();
-                  } else {
-                    setState(() {
-                      _playStatus = BattleRunStatus.running;
-                    });
-                    _lastTick = null;
-                    _playbackTicker?.start();
-                  }
-                },
-                child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
+            ),
+            const SizedBox(height: 8),
+            ValueListenableBuilder<_BattlePoint?>(
+              valueListenable: _currentPoint,
+              builder: (_, point, __) => Text('날짜: ${point?.ymd ?? _points.first.ymd}'),
+            ),
+            const SizedBox(height: 8),
+            IgnorePointer(
+              ignoring: _isPlaying,
+              child: Row(
+                children: <Widget>[
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_playStatus == BattleRunStatus.running) {
+                        setState(() {
+                          _playStatus = BattleRunStatus.paused;
+                          _isPlaying = false;
+                        });
+                        _playbackTimer?.cancel();
+                      } else {
+                        setState(() {
+                          _playStatus = BattleRunStatus.running;
+                          _isPlaying = true;
+                        });
+                        _startPlayback();
+                      }
+                    },
+                    child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(onPressed: _skipToResult, child: const Text('스킵 → 결과')),
+                ],
               ),
-              const SizedBox(width: 8),
-              OutlinedButton(onPressed: _skipToResult, child: const Text('스킵 → 결과')),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
       ),
     );
   }
+
+
+
+
 
   Widget _statusCard(String label, StockModel stock, double value, double rate, bool leading) {
     return AnimatedScale(
