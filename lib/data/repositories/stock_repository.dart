@@ -118,6 +118,42 @@ class StockRepository {
         .toList();
   }
 
+
+  List<SimulationPoint> toSimulationSeriesWithEvents({
+    required List<PricePoint> prices,
+    required Map<int, int> investEventsByYmd,
+  }) {
+    if (prices.isEmpty || investEventsByYmd.isEmpty) {
+      return <SimulationPoint>[];
+    }
+
+    double cash = 0;
+    double shares = 0;
+    final List<SimulationPoint> points = <SimulationPoint>[];
+
+    for (final PricePoint point in prices) {
+      final int invest = investEventsByYmd[point.ymd] ?? 0;
+      if (invest > 0) {
+        cash += invest.toDouble();
+      }
+
+      if (cash > 0 && point.close > 0) {
+        shares += cash / point.close;
+        cash = 0;
+      }
+
+      points.add(
+        SimulationPoint(
+          ymd: point.ymd,
+          close: point.close,
+          value: shares * point.close,
+        ),
+      );
+    }
+
+    return points;
+  }
+
   Future<List<StockModel>> _loadTopMetaByMarket(String market) async {
     final List<StockModel>? cached = _stockCache[market];
     if (cached != null) {
