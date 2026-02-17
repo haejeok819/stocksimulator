@@ -28,29 +28,55 @@ class _LoadingScreenState extends State<LoadingScreen> {
   }
 
   Future<void> _prepareDataAndMove() async {
-    final List<PricePoint> prices = await widget.repository.loadRange(
-      market: widget.flowState.marketCode,
-      ticker: widget.flowState.selectedStock?.ticker ?? '',
-      start: widget.flowState.startDate,
-      end: widget.flowState.endDate,
-    );
-    final List<SimulationPoint> series = widget.repository.toSimulationSeries(
-      prices: prices,
-      investment: widget.flowState.investment,
-    );
+    try {
+      final List<PricePoint> prices = await widget.repository.loadRange(
+        market: widget.flowState.marketCode,
+        ticker: widget.flowState.selectedStock?.ticker ?? '',
+        start: widget.flowState.startDate,
+        end: widget.flowState.endDate,
+      );
+      final List<SimulationPoint> series = widget.repository.toSimulationSeries(
+        prices: prices,
+        investment: widget.flowState.investment,
+      );
 
-    if (!mounted) {
-      return;
-    }
+      if (!mounted) {
+        return;
+      }
 
-    Navigator.of(context).pushReplacement(
-      buildRightSlideRoute(
-        ChartPlaybackScreen(
-          points: series,
-          flowState: widget.flowState,
+      Navigator.of(context).pushReplacement(
+        buildRightSlideRoute(
+          ChartPlaybackScreen(
+            points: series,
+            flowState: widget.flowState,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('시뮬레이션 실패'),
+            content: Text(error.toString()),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   @override
