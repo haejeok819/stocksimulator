@@ -42,12 +42,22 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   double _pulseTime = 0;
   bool _playing = true;
   double _speed = 1;
+  int _uiThrottleCounter = 0;
 
   @override
   void initState() {
     super.initState();
     AdService.instance.preloadInterstitial();
-    _startPlayback();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      final Duration delay = _isWindowsDesktop ? const Duration(milliseconds: 400) : Duration.zero;
+      Future<void>.delayed(delay, () {
+        if (mounted) {
+          _startPlayback();
+        }
+      });
+    });
   }
 
   @override
@@ -55,6 +65,11 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     _ticker?.cancel();
     _skipTimer?.cancel();
     super.dispose();
+  }
+
+  bool get _isWindowsDesktop {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows;
   }
 
   double get _stepPerTick {
@@ -76,22 +91,30 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       }
     });
 
-    _ticker = Timer.periodic(const Duration(milliseconds: 16), (_) {
+    final int intervalMs = _isWindowsDesktop ? 160 : 16;
+    _ticker = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
       if (!mounted || !_playing) return;
 
-      setState(() {
-        _pulseTime += 0.16;
-        if (AppSettings.chartMotionEnabled.value) {
-          _accumulated += (_stepPerTick * _speed);
-          final int step = _accumulated.floor();
-          if (step > 0) {
-            _accumulated -= step;
-            _index = min(_index + step, widget.points.length - 1);
-          }
-        } else {
-          _index = min(_index + _speed.round().clamp(1, 3), widget.points.length - 1);
+      int nextIndex = _index;
+      double nextPulse = _pulseTime + 0.16;
+      if (AppSettings.chartMotionEnabled.value) {
+        _accumulated += (_stepPerTick * _speed);
+        final int step = _accumulated.floor();
+        if (step > 0) {
+          _accumulated -= step;
+          nextIndex = min(_index + step, widget.points.length - 1);
         }
-      });
+      } else {
+        nextIndex = min(_index + _speed.round().clamp(1, 3), widget.points.length - 1);
+      }
+
+      final bool shouldUpdateUi = !_isWindowsDesktop || (++_uiThrottleCounter % 3 == 0) || nextIndex >= widget.points.length - 1;
+      _index = nextIndex;
+      _pulseTime = nextPulse;
+
+      if (shouldUpdateUi && mounted) {
+        setState(() {});
+      }
 
       if (_index >= widget.points.length - 1) {
         _ticker?.cancel();
@@ -208,9 +231,12 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생', style: PlaybackDesignTokens.title)),
-      body: DecoratedBox(
-        decoration: const BoxDecoration(gradient: PlaybackDesignTokens.screenBackground),
-        child: Padding(
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (_, __) => KeyEventResult.handled,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: PlaybackDesignTokens.screenBackground),
+          child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -283,6 +309,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                   ),
                 ),
             ],
+            ),
           ),
         ),
       ),

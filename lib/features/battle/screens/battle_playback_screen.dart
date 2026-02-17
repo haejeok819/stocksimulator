@@ -32,7 +32,11 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(() => ref.read(battlePlaybackControllerProvider.notifier).start());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      ref.read(battlePlaybackControllerProvider.notifier).start();
+    });
   }
 
   String _koreanName(StockModel? stock) {
@@ -141,14 +145,17 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Battle Playback')),
-      body: dataAsync.when(
-        data: (BattleSeriesData data) {
-          final BattlePlaybackState playback = ref.watch(battlePlaybackControllerProvider);
-          final BattleTick tick = data.tickAt(playback.index);
-          final bool aLeading = tick.returnA >= tick.returnB;
-          final String leader = aLeading ? 'A' : 'B';
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (_, __) => KeyEventResult.handled,
+        child: dataAsync.when(
+          data: (BattleSeriesData data) {
+            final BattlePlaybackState playback = ref.watch(battlePlaybackControllerProvider);
+            final BattleTick tick = data.tickAt(playback.index);
+            final bool aLeading = tick.returnA >= tick.returnB;
+            final String leader = aLeading ? 'A' : 'B';
 
-          if (_previousLeader != leader) {
+            if (_previousLeader != leader) {
             _previousLeader = leader;
             if (!setup.safeMode) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -163,7 +170,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
             }
           }
 
-          if (playback.status == BattlePlaybackStatus.ended && !_resultDialogShown) {
+            if (playback.status == BattlePlaybackStatus.ended && !_resultDialogShown) {
             WidgetsBinding.instance.addPostFrameCallback((_) async {
               ref.read(battleResultProvider.notifier).state = BattleResultState(
                 finalValueA: tick.valueA,
@@ -176,10 +183,10 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
             });
           }
 
-          final double leadGap = (tick.returnA - tick.returnB).abs();
-          final double gauge = (50 + ((tick.returnA - tick.returnB).clamp(-20, 20) * 2.5)).clamp(0, 100) / 100;
+            final double leadGap = (tick.returnA - tick.returnB).abs();
+            final double gauge = (50 + ((tick.returnA - tick.returnB).clamp(-20, 20) * 2.5)).clamp(0, 100) / 100;
 
-          return Stack(
+            return Stack(
             children: <Widget>[
               if (_flash && !setup.safeMode)
                 Positioned.fill(
@@ -314,8 +321,9 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+        ),
       ),
     );
   }
