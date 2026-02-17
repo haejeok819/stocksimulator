@@ -47,10 +47,16 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   double _speed = 1;
   bool _pendingFrameUpdate = false;
   bool _finishing = false;
+  bool _isPlaying = false;
+  BattleRunStatus _playStatus = BattleRunStatus.ready;
+  final ValueNotifier<int> _progressIndex = ValueNotifier<int>(0);
+  final ValueNotifier<_BattlePoint?> _currentPoint = ValueNotifier<_BattlePoint?>(null);
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _progressIndex.dispose();
+    _currentPoint.dispose();
     super.dispose();
   }
 
@@ -162,6 +168,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   Future<void> _startBattle() async {
+    _ticker?.cancel();
+    _isPlaying = false;
+    _playStatus = BattleRunStatus.ready;
     final BattleSetupState setup = ref.read(battleSetupProvider);
     if (setup.stockA == null || setup.stockB == null) {
       _showMessage('종목 A/B를 선택하세요.');
@@ -216,16 +225,10 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           .toList();
 
       _points = points;
-      ref.read(battleRunProvider.notifier).setStateValue(
-            BattleRunState(
-              status: BattleRunStatus.ready,
-              progressIndex: 0,
-              currentValueA: points.first.valueA,
-              currentValueB: points.first.valueB,
-              currentReturnA: points.first.returnA,
-              currentReturnB: points.first.returnB,
-            ),
-          );
+      _playStatus = BattleRunStatus.ready;
+      _isPlaying = false;
+      _progressIndex.value = 0;
+      _currentPoint.value = points.first;
       setState(() {
         _stage = _BattleStage.playback;
         _countdown = 3;
@@ -251,38 +254,31 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   void _startPlayback() {
-    ref.read(battleRunProvider.notifier).setStateValue(ref.read(battleRunProvider).copyWith(status: BattleRunStatus.running));
+    _playStatus = BattleRunStatus.running;
+    _isPlaying = true;
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 32), (Timer timer) {
-      if (!mounted) return;
-      final BattleRunState state = ref.read(battleRunProvider);
-      if (state.status != BattleRunStatus.running) {
+      if (!mounted || !_isPlaying || _playStatus != BattleRunStatus.running) {
         return;
       }
       _scheduleFrameUpdate(() {
-        final BattleRunState latest = ref.read(battleRunProvider);
-        if (latest.status != BattleRunStatus.running) {
+        if (!_isPlaying || _playStatus != BattleRunStatus.running) {
           return;
         }
 
         final int step = _speed == 1 ? 1 : (_speed == 2 ? 2 : 4);
-        final int next = min(latest.progressIndex + step, _points.length - 1);
-        if (next == latest.progressIndex) {
+        final int currentIndex = _progressIndex.value;
+        final int next = min(currentIndex + step, _points.length - 1);
+        if (next == currentIndex) {
           return;
         }
 
-        final _BattlePoint current = _points[next];
-        ref.read(battleRunProvider.notifier).setStateValue(
-              latest.copyWith(
-                progressIndex: next,
-                currentValueA: current.valueA,
-                currentValueB: current.valueB,
-                currentReturnA: current.returnA,
-                currentReturnB: current.returnB,
-              ),
-            );
+        _progressIndex.value = next;
+        _currentPoint.value = _points[next];
 
         if (next >= _points.length - 1) {
+          _isPlaying = false;
+          _playStatus = BattleRunStatus.finished;
           timer.cancel();
           _finishBattle();
         }
@@ -305,7 +301,8 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
           winner: winner,
         );
     ref.read(battleResultProvider.notifier).state = result;
-    ref.read(battleRunProvider.notifier).setStateValue(ref.read(battleRunProvider).copyWith(status: BattleRunStatus.finished));
+    _playStatus = BattleRunStatus.finished;
+    _isPlaying = false;
 
     final BattleSetupState setup = ref.read(battleSetupProvider);
     await _showWinnerBurstDialog(result: result, setup: setup);
@@ -369,6 +366,9 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   }
 
   Future<void> _skipToResult() async {
+    _isPlaying = false;
+    _playStatus = BattleRunStatus.finished;
+    _ticker?.cancel();
     final InterstitialAd? ad = await AdHelper.loadInterstitial();
     if (ad == null) {
       _finishBattle();
@@ -412,14 +412,13 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   @override
   Widget build(BuildContext context) {
     final BattleSetupState setup = ref.watch(battleSetupProvider);
-    final BattleRunState run = ref.watch(battleRunProvider);
     final BattleResultState? result = ref.watch(battleResultProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('대결')),
       body: switch (_stage) {
         _BattleStage.setup => _buildSetup(setup),
-        _BattleStage.playback => _buildPlayback(setup, run),
+        _BattleStage.playback => _buildPlayback(setup),
         _BattleStage.result => _buildResult(setup, result),
       },
     );
@@ -526,35 +525,65 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
     );
   }
 
-  Widget _buildPlayback(BattleSetupState setup, BattleRunState run) {
-    final _BattlePoint current = _points[run.progressIndex];
-    final bool aLeading = run.currentValueA >= run.currentValueB;
-    return Padding(
+  Widget _buildPlayback(BattleSetupState setup) {
+    return IgnorePointer(
+      ignoring: _isPlaying,
+      child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: <Widget>[
           if (_countdown > 0) Text('$_countdown', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
           Row(
             children: <Widget>[
-              Expanded(child: _statusCard('A', setup.stockA!, run.currentValueA, run.currentReturnA, aLeading)),
+              Expanded(
+                child: ValueListenableBuilder<_BattlePoint?>(
+                  valueListenable: _currentPoint,
+                  builder: (_, _BattlePoint? point, __) {
+                    final _BattlePoint current = point ?? _points.first;
+                    final bool aLeading = current.valueA >= current.valueB;
+                    return _statusCard('A', setup.stockA!, current.valueA, current.returnA, aLeading);
+                  },
+                ),
+              ),
               const SizedBox(width: 8),
-              Expanded(child: _statusCard('B', setup.stockB!, run.currentValueB, run.currentReturnB, !aLeading)),
+              Expanded(
+                child: ValueListenableBuilder<_BattlePoint?>(
+                  valueListenable: _currentPoint,
+                  builder: (_, _BattlePoint? point, __) {
+                    final _BattlePoint current = point ?? _points.first;
+                    final bool aLeading = current.valueA >= current.valueB;
+                    return _statusCard('B', setup.stockB!, current.valueB, current.returnB, !aLeading);
+                  },
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(10),
-              child: BattleLineChart(
-                seriesA: _points.map((e) => e.valueA).toList(),
-                seriesB: _points.map((e) => e.valueB).toList(),
-                progress: run.progressIndex,
+            child: RepaintBoundary(
+              child: Container(
+                decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.all(10),
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _progressIndex,
+                  builder: (_, int progress, __) {
+                    return BattleLineChart(
+                      seriesA: _points.map((e) => e.valueA).toList(),
+                      seriesB: _points.map((e) => e.valueB).toList(),
+                      progress: progress,
+                    );
+                  },
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Text('날짜: ${current.ymd}'),
+          ValueListenableBuilder<_BattlePoint?>(
+            valueListenable: _currentPoint,
+            builder: (_, _BattlePoint? point, __) {
+              return Text('날짜: ${point?.ymd ?? _points.first.ymd}');
+            },
+          ),
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
@@ -570,19 +599,24 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () {
-                  if (run.status == BattleRunStatus.running) {
-                    ref.read(battleRunProvider.notifier).setStateValue(run.copyWith(status: BattleRunStatus.paused));
+                  if (_playStatus == BattleRunStatus.running) {
+                    setState(() {
+                      _playStatus = BattleRunStatus.paused;
+                    });
                   } else {
-                    ref.read(battleRunProvider.notifier).setStateValue(run.copyWith(status: BattleRunStatus.running));
+                    setState(() {
+                      _playStatus = BattleRunStatus.running;
+                    });
                   }
                 },
-                child: Text(run.status == BattleRunStatus.running ? '일시정지' : '재개'),
+                child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
               ),
               const SizedBox(width: 8),
               OutlinedButton(onPressed: _skipToResult, child: const Text('스킵 → 결과')),
             ],
           ),
         ],
+      ),
       ),
     );
   }
