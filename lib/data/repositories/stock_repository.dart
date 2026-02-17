@@ -85,15 +85,10 @@ class StockRepository {
         return <StockModel>[];
       }
 
-      final List<Map<String, dynamic>> typedMetaList =
-          (decodedObject
-                  .whereType<Map>()
-                  .map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e))
-                  .toList())
-              .asMap()
-              .entries
-              .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
-              .toList();
+      final List<Map<String, dynamic>> typedMetaList = decodedObject
+          .whereType<Map>()
+          .map((Map<Object?, Object?> row) => Map<String, dynamic>.from(row))
+          .toList();
 
       final List<StockModel> loaded = typedMetaList
           .asMap()
