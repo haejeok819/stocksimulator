@@ -9,11 +9,15 @@ class HistoryRepository {
     if (!await file.exists()) {
       return <SimulationResult>[];
     }
-    final List<dynamic> list = jsonDecode(await file.readAsString()) as List<dynamic>;
-    return list
-        .whereType<Map<String, dynamic>>()
-        .map((Map<String, dynamic> row) => SimulationResult.fromJson(row))
-        .toList();
+    try {
+      final List<dynamic> list = jsonDecode(await file.readAsString()) as List<dynamic>;
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map((Map<String, dynamic> row) => SimulationResult.fromJson(row))
+          .toList();
+    } on FormatException {
+      return <SimulationResult>[];
+    }
   }
 
   Future<void> append(SimulationResult item) async {

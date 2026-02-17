@@ -137,8 +137,30 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       return;
     }
     _resultShown = true;
+    _skipTimer?.cancel();
 
     if (widget.points.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('데이터 없음'),
+            content: const Text('선택한 기간에 대한 데이터를 찾을 수 없습니다.'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      );
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
       return;
     }
 
@@ -148,7 +170,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
     await _historyRepository.append(
       SimulationResult(
-        ticker: widget.flowState.selectedStock?.symbol ?? '',
+        ticker: widget.flowState.selectedStock?.ticker ?? '',
         startYmd: widget.points.first.ymd,
         endYmd: widget.points.last.ymd,
         amount: finalAmount,
@@ -198,7 +220,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.flowState.selectedStock?.name ?? '차트'} 재생'),
+        title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생'),
         actions: <Widget>[
           if (_showSkip)
             TextButton(

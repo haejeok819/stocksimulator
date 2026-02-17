@@ -1,78 +1,48 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:math';
-import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:stocksimulator/data/cache/year_file_cache.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
+import 'package:stocksimulator/shared/utils/asset_paths.dart';
 
 class PriceFileDataSource {
   PriceFileDataSource({YearFileCache? cache}) : _cache = cache ?? YearFileCache();
 
   final YearFileCache _cache;
 
-  Future<PriceYearData> loadYear({
+  Future<List<PricePoint>> loadYear({
     required String market,
     required String ticker,
     required int year,
   }) async {
-    final String relative = 'prices/$market/$ticker/$year.json.gz';
-    final String cacheKey = relative;
-
-    Uint8List? bytes = await _cache.read(cacheKey);
-    bytes ??= await _readAssetBytes(relative);
-
-    if (bytes != null) {
-      await _cache.write(cacheKey, bytes);
-      final List<int> decoded = GZipCodec().decode(bytes);
-      final Map<String, dynamic> jsonMap = jsonDecode(utf8.decode(decoded)) as Map<String, dynamic>;
-      return PriceYearData.fromJson(jsonMap);
+    final List<PricePoint>? cached = _cache.read(market: market, ticker: ticker, year: year);
+    if (cached != null) {
+      return cached;
     }
 
-    return _generateFallback(market: market, ticker: ticker, year: year);
-  }
-
-  Future<Uint8List?> _readAssetBytes(String path) async {
+    final String path = AssetPaths.assetPathYear(market, ticker, year);
     try {
-      final ByteData data = await rootBundle.load(path);
-      return data.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
+      final ByteData bytes = await rootBundle.load(path);
+      final List<int> decoded = GZipDecoder().decodeBytes(bytes.buffer.asUint8List());
+      final dynamic parsed = jsonDecode(utf8.decode(decoded));
+      final List<PricePoint> points = (parsed as List<dynamic>)
+          .whereType<List<dynamic>>()
+          .where((List<dynamic> row) => row.length >= 2)
+          .map(
+            (List<dynamic> row) => PricePoint(
+              ymd: (row[0] as num).toInt(),
+              close: (row[1] as num).toDouble(),
+            ),
+          )
+          .toList();
 
-  PriceYearData _generateFallback({
-    required String market,
-    required String ticker,
-    required int year,
-  }) {
-    final Random random = Random(year + ticker.hashCode);
-    double close = 100 + random.nextDouble() * 40;
-    final List<PricePoint> points = <PricePoint>[];
-    for (int m = 1; m <= 12; m++) {
-      for (int d = 1; d <= 28; d++) {
-        close += (random.nextDouble() - 0.48) * 2.8;
-        if (close < 10) {
-          close = 10;
-        }
-        points.add(
-          PricePoint(
-            ymd: year * 10000 + m * 100 + d,
-            close: double.parse(close.toStringAsFixed(2)),
-          ),
-        );
-      }
+      _cache.write(market: market, ticker: ticker, year: year, points: points);
+      return points;
+    } catch (error) {
+      debugPrint('Price asset load failed: $path ($error)');
+      return <PricePoint>[];
     }
-
-    return PriceYearData(
-      v: 1,
-      market: market,
-      ticker: ticker,
-      currency: market == 'KR' ? 'KRW' : 'USD',
-      priceScale: 1,
-      year: year,
-      series: points,
-    );
   }
 }
