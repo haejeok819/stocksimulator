@@ -22,17 +22,20 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   void initState() {
     super.initState();
-    _goNext();
+    _prepareDataAndMove();
   }
 
-  Future<void> _goNext() async {
+  Future<void> _prepareDataAndMove() async {
     await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (!mounted) return;
+    final List<double> prices = widget.repository.getChartPrices();
+    if (!mounted) {
+      return;
+    }
 
-    Navigator.of(context).pushReplacement(
+    Navigator.of(context).push(
       buildRightSlideRoute(
         ChartPlaybackScreen(
-          prices: widget.repository.getChartPrices(),
+          prices: prices,
           flowState: widget.flowState,
         ),
       ),
@@ -46,9 +49,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            CircularProgressIndicator(),
+            SizedBox(width: 44, height: 44, child: CircularProgressIndicator()),
             SizedBox(height: 18),
-            Text('데이터 준비 중...'),
+            Text('데이터 불러오는 중…'),
           ],
         ),
       ),
