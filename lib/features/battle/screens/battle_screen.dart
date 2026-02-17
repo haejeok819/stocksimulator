@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:intl/intl.dart';
@@ -527,103 +526,98 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return SizedBox.expand(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: <Widget>[
-            Visibility(
-              visible: _countdown > 0,
-              maintainState: true,
-              maintainAnimation: true,
-              maintainSize: true,
-              child: Text(
-                '$_countdown',
-                style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: <Widget>[
+          Visibility(
+            visible: _countdown > 0,
+            maintainState: true,
+            maintainAnimation: true,
+            maintainSize: true,
+            child: Text(
+              '$_countdown',
+              style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: ValueListenableBuilder<_BattlePoint?>(
+                  valueListenable: _currentPoint,
+                  builder: (_, point, __) {
+                    final current = point ?? _points.first;
+                    final aLeading = current.valueA >= current.valueB;
+                    return _statusCard('A', setup.stockA!, current.valueA, current.returnA, aLeading);
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ValueListenableBuilder<_BattlePoint?>(
+                  valueListenable: _currentPoint,
+                  builder: (_, point, __) {
+                    final current = point ?? _points.first;
+                    final aLeading = current.valueA >= current.valueB;
+                    return _statusCard('B', setup.stockB!, current.valueB, current.returnB, !aLeading);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 320,
+            child: RepaintBoundary(
+              child: Container(
+                decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.all(10),
+                child: BattleLineChart(
+                  seriesA: _seriesA,
+                  seriesB: _seriesB,
+                  progressListenable: _progressIndex,
+                ),
               ),
             ),
-            Row(
+          ),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<_BattlePoint?>(
+            valueListenable: _currentPoint,
+            builder: (_, point, __) => Text('날짜: ${point?.ymd ?? _points.first.ymd}'),
+          ),
+          const SizedBox(height: 8),
+          IgnorePointer(
+            ignoring: _isPlaying,
+            child: Row(
               children: <Widget>[
-                Expanded(
-                  child: ValueListenableBuilder<_BattlePoint?>(
-                    valueListenable: _currentPoint,
-                    builder: (_, point, __) {
-                      final current = point ?? _points.first;
-                      final aLeading = current.valueA >= current.valueB;
-                      return _statusCard('A', setup.stockA!, current.valueA, current.returnA, aLeading);
-                    },
-                  ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (_playStatus == BattleRunStatus.running) {
+                      setState(() {
+                        _playStatus = BattleRunStatus.paused;
+                        _isPlaying = false;
+                      });
+                      _playbackTimer?.cancel();
+                    } else {
+                      setState(() {
+                        _playStatus = BattleRunStatus.running;
+                        _isPlaying = true;
+                      });
+                      _startPlayback();
+                    }
+                  },
+                  child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
                 ),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: ValueListenableBuilder<_BattlePoint?>(
-                    valueListenable: _currentPoint,
-                    builder: (_, point, __) {
-                      final current = point ?? _points.first;
-                      final aLeading = current.valueA >= current.valueB;
-                      return _statusCard('B', setup.stockB!, current.valueB, current.returnB, !aLeading);
-                    },
-                  ),
-                ),
+                OutlinedButton(onPressed: _skipToResult, child: const Text('스킵 → 결과')),
               ],
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 320,
-              child: RepaintBoundary(
-                child: Container(
-                  decoration: BoxDecoration(color: const Color(0xFF24242D), borderRadius: BorderRadius.circular(14)),
-                  padding: const EdgeInsets.all(10),
-                  child: BattleLineChart(
-                    seriesA: _seriesA,
-                    seriesB: _seriesB,
-                    progressListenable: _progressIndex,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ValueListenableBuilder<_BattlePoint?>(
-              valueListenable: _currentPoint,
-              builder: (_, point, __) => Text('날짜: ${point?.ymd ?? _points.first.ymd}'),
-            ),
-            const SizedBox(height: 8),
-            IgnorePointer(
-              ignoring: _isPlaying,
-              child: Row(
-                children: <Widget>[
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_playStatus == BattleRunStatus.running) {
-                        setState(() {
-                          _playStatus = BattleRunStatus.paused;
-                          _isPlaying = false;
-                        });
-                        _playbackTimer?.cancel();
-                      } else {
-                        setState(() {
-                          _playStatus = BattleRunStatus.running;
-                          _isPlaying = true;
-                        });
-                        _startPlayback();
-                      }
-                    },
-                    child: Text(_playStatus == BattleRunStatus.running ? '일시정지' : '재개'),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(onPressed: _skipToResult, child: const Text('스킵 → 결과')),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-
-
-
-
 
   Widget _statusCard(String label, StockModel stock, double value, double rate, bool leading) {
     return AnimatedScale(

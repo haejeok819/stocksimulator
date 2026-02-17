@@ -21,7 +21,7 @@ class BattleLineChart extends StatelessWidget {
         seriesB: seriesB,
         progressListenable: progressListenable,
       ),
-      child: const SizedBox.expand(),
+      size: Size.infinite,
     );
   }
 }
