@@ -61,6 +61,14 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     };
   }
 
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
   @override
   void dispose() {
     _placeholderTimer?.cancel();
@@ -356,7 +364,6 @@ class _PremiumSearchBarState extends State<_PremiumSearchBar> {
       decoration: BoxDecoration(
         color: const Color(0xFF2A2A35),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: focused ? const Color(0xFF5677E7) : const Color(0x1FFFFFFF)),
         boxShadow: !widget.safeMode && focused
             ? <BoxShadow>[BoxShadow(color: const Color(0xFF5677E7).withOpacity(0.2), blurRadius: 10)]
             : <BoxShadow>[],
