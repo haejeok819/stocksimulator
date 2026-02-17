@@ -56,6 +56,16 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
 
   String _formatWon(int value) => '${_formatter.format(value)}원';
 
+  String _presetLabel(int value) {
+    if (value >= 100000000) {
+      return '${(value / 100000000).toStringAsFixed(0)}억원';
+    }
+    if (value >= 10000) {
+      return '${(value / 10000).toStringAsFixed(0)}만원';
+    }
+    return _formatWon(value);
+  }
+
   String _approxKorean(int value) {
     if (value >= 100000000) {
       return '약 ${(value / 100000000).toStringAsFixed(1)}억원';
@@ -71,7 +81,6 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
   }
 
   void _startRepeat(int delta) {
-    _onFineTuneTap(delta);
     _repeatTimer?.cancel();
     _repeatTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
       ref.read(investmentAmountProvider.notifier).addAmount(delta);
@@ -142,103 +151,215 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
         elevation: 0,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text('초기 투자금을 입력하세요.', style: TextStyle(color: Color(0xFFA1A1A8))),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A2A32),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    _formatWon(amount),
-                    style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _approxKorean(amount),
-                    style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _presetAmounts.map((int preset) {
-                final bool selected = amount == preset;
-                return ChoiceChip(
-                  label: Text(_formatWon(preset)),
-                  selected: selected,
-                  onSelected: (_) => ref.read(investmentAmountProvider.notifier).setAmount(preset),
-                  labelStyle: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFFE5E5E7),
-                    fontWeight: FontWeight.w600,
-                  ),
-                  selectedColor: const Color(0xFF5677E7),
-                  backgroundColor: const Color(0xFF2A2A32),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: <int>[-100000, -10000, 10000, 100000].map((int delta) {
-                final String label = delta > 0 ? '+${_formatter.format(delta)}' : '-${_formatter.format(delta.abs())}';
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: GestureDetector(
-                      onLongPressStart: (_) => _startRepeat(delta),
-                      onLongPressEnd: (_) => _stopRepeat(),
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2A2A32),
-                          side: const BorderSide(color: Color(0xFF3A3A42)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        onPressed: () => _onFineTuneTap(delta),
-                        child: Text(label, style: const TextStyle(color: Colors.white)),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    const SizedBox(height: 6),
+                    const Text('초기 투자금을 입력하세요.', style: TextStyle(color: Color(0xFFA1A1A8))),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2A2A32),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            _formatWon(amount),
+                            style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _approxKorean(amount),
+                            style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
-            ),
-            TextButton(
-              onPressed: () => _showDirectInput(amount),
-              child: const Text('직접 입력', style: TextStyle(color: Color(0xFFA1A1A8))),
-            ),
-            const Spacer(),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF5677E7),
-                disabledBackgroundColor: const Color(0xFF3A3A42),
-              ),
-              onPressed: canStart
-                  ? () {
-                      widget.flowState.setInvestment(amount);
-                      Navigator.of(context).push(
-                        buildRightSlideRoute(
-                          LoadingScreen(
-                            repository: widget.repository,
-                            flowState: widget.flowState,
+                    const SizedBox(height: 18),
+                    const Text('빠른 선택', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    const SizedBox(height: 8),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _presetAmounts.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 3.0,
+                      ),
+                      itemBuilder: (BuildContext context, int index) {
+                        final int preset = _presetAmounts[index];
+                        final bool selected = amount == preset;
+                        return _PresetChip(
+                          label: _presetLabel(preset),
+                          selected: selected,
+                          onTap: () => ref.read(investmentAmountProvider.notifier).setAmount(preset),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    const Text('미세 조정', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: <int>[-100000, -10000, 10000, 100000].map((int delta) {
+                        final String label = switch (delta) {
+                          -100000 => '-10만',
+                          -10000 => '-1만',
+                          10000 => '+1만',
+                          _ => '+10만',
+                        };
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: _FineTuneButton(
+                              label: label,
+                              onTap: () => _onFineTuneTap(delta),
+                              onRepeatStart: () => _startRepeat(delta),
+                              onRepeatStop: _stopRepeat,
+                            ),
                           ),
-                        ),
-                      );
-                    }
-                  : null,
-              child: const Text('재생 시작', style: TextStyle(color: Colors.white)),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 6),
+                    TextButton(
+                      onPressed: () => _showDirectInput(amount),
+                      child: const Text('직접 입력', style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12)),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5677E7),
+                  disabledBackgroundColor: const Color(0xFF3A3A42),
+                ),
+                onPressed: canStart
+                    ? () {
+                        widget.flowState.setInvestment(amount);
+                        Navigator.of(context).push(
+                          buildRightSlideRoute(
+                            LoadingScreen(
+                              repository: widget.repository,
+                              flowState: widget.flowState,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
+                child: const Text('재생 시작', style: TextStyle(color: Colors.white)),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? const Color(0xFF5677E7) : const Color(0xFF2A2A32),
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(19),
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(color: const Color(0xFF3A3A42), width: 1),
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FineTuneButton extends StatelessWidget {
+  const _FineTuneButton({
+    required this.label,
+    required this.onTap,
+    required this.onRepeatStart,
+    required this.onRepeatStop,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final VoidCallback onRepeatStart;
+  final VoidCallback onRepeatStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: Material(
+        color: const Color(0xFF2A2A32),
+        borderRadius: BorderRadius.circular(16),
+        child: Listener(
+          onPointerUp: (_) => onRepeatStop(),
+          onPointerCancel: (_) => onRepeatStop(),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            onLongPress: onRepeatStart,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF3A3A42)),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
