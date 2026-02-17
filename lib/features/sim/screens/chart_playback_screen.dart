@@ -170,7 +170,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
     await _historyRepository.append(
       SimulationResult(
-        ticker: widget.flowState.selectedStock?.symbol ?? '',
+        ticker: widget.flowState.selectedStock?.ticker ?? '',
         startYmd: widget.points.first.ymd,
         endYmd: widget.points.last.ymd,
         amount: finalAmount,
@@ -220,7 +220,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.flowState.selectedStock?.name ?? '차트'} 재생'),
+        title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생'),
         actions: <Widget>[
           if (_showSkip)
             TextButton(

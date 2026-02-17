@@ -4,6 +4,7 @@ import 'package:stocksimulator/app/app.dart';
 void main() {
   testWidgets('Main tabs and sim stock selector render', (WidgetTester tester) async {
     await tester.pumpWidget(const StockSimulatorApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('종목 선택'), findsOneWidget);
     expect(find.text('US'), findsOneWidget);

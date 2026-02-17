@@ -1,5 +1,5 @@
 class SimulationCache {
-  String? selectedSymbol;
+  String? selectedTicker;
   String selectedMarket = 'KR';
   DateTime startDate = DateTime.now().subtract(const Duration(days: 89));
   DateTime endDate = DateTime.now();

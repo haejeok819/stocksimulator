@@ -15,8 +15,8 @@ class SimulationFlowState {
 
   void selectStock(StockModel stock) {
     selectedStock = stock;
-    _cache.selectedSymbol = stock.symbol;
-    _cache.selectedMarket = stock.market == StockMarket.kr ? 'KR' : 'US';
+    _cache.selectedTicker = stock.ticker;
+    _cache.selectedMarket = stock.market;
   }
 
   void setDateRange(DateTime start, DateTime end) {
