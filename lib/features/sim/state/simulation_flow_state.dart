@@ -37,7 +37,12 @@ class SimulationFlowState {
   }
 
   void setInvestMode(InvestMode mode) {
+    final InvestMode previous = investMode;
     investMode = mode;
+    if (mode == InvestMode.dca && previous != InvestMode.dca) {
+      _cache.investment = 100000;
+      dcaAmountPerTrade = 100000;
+    }
   }
 
   void setDcaInterval(DcaInterval interval) {

@@ -43,7 +43,10 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(investmentAmountProvider.notifier).setAmount(widget.flowState.investment);
+      final int initialAmount = widget.flowState.investMode == InvestMode.dca
+          ? widget.flowState.dcaAmountPerTrade
+          : widget.flowState.investment;
+      ref.read(investmentAmountProvider.notifier).setAmount(initialAmount);
     });
   }
 
@@ -233,7 +236,11 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
                 ),
                 onPressed: canStart
                     ? () {
-                        widget.flowState.setInvestment(amount);
+                        if (widget.flowState.investMode == InvestMode.dca) {
+                          widget.flowState.setDcaAmountPerTrade(amount);
+                        } else {
+                          widget.flowState.setInvestment(amount);
+                        }
                         Navigator.of(context).push(
                           buildRightSlideRoute(
                             LoadingScreen(

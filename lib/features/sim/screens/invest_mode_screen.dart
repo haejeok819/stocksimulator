@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
-import 'package:stocksimulator/features/sim/screens/dca_amount_screen.dart';
 import 'package:stocksimulator/features/sim/screens/investment_input_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/utils/dca_schedule.dart';
@@ -124,10 +123,11 @@ class _InvestModeScreenState extends State<InvestModeScreen> {
             const Spacer(),
             ElevatedButton(
               onPressed: () {
-                final Widget next = widget.flowState.investMode == InvestMode.lumpSum
-                    ? InvestmentInputScreen(repository: widget.repository, flowState: widget.flowState)
-                    : DcaAmountScreen(repository: widget.repository, flowState: widget.flowState, eventCount: _eventCount);
-                Navigator.of(context).push(buildRightSlideRoute(next));
+                Navigator.of(context).push(
+                  buildRightSlideRoute(
+                    InvestmentInputScreen(repository: widget.repository, flowState: widget.flowState),
+                  ),
+                );
               },
               child: const Text('다음'),
             ),
