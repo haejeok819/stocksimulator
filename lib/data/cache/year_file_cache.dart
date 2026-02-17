@@ -1,22 +1,38 @@
-import 'dart:io';
-import 'dart:typed_data';
+import 'dart:collection';
+
+import 'package:stocksimulator/data/models/price_year_data.dart';
 
 class YearFileCache {
-  YearFileCache({Directory? root}) : _root = root ?? Directory('${Directory.systemTemp.path}/stocksim-cache');
+  YearFileCache({this.capacity = 5});
 
-  final Directory _root;
+  final int capacity;
+  final LinkedHashMap<String, List<PricePoint>> _cache = LinkedHashMap<String, List<PricePoint>>();
 
-  Future<Uint8List?> read(String key) async {
-    final File file = File('${_root.path}/$key');
-    if (!await file.exists()) {
+  List<PricePoint>? read({required String market, required String ticker, required int year}) {
+    final String key = _key(market: market, ticker: ticker, year: year);
+    final List<PricePoint>? value = _cache.remove(key);
+    if (value == null) {
       return null;
     }
-    return file.readAsBytes();
+    _cache[key] = value;
+    return value;
   }
 
-  Future<void> write(String key, Uint8List bytes) async {
-    final File file = File('${_root.path}/$key');
-    await file.parent.create(recursive: true);
-    await file.writeAsBytes(bytes, flush: true);
+  void write({
+    required String market,
+    required String ticker,
+    required int year,
+    required List<PricePoint> points,
+  }) {
+    final String key = _key(market: market, ticker: ticker, year: year);
+    _cache.remove(key);
+    _cache[key] = points;
+
+    while (_cache.length > capacity) {
+      _cache.remove(_cache.keys.first);
+    }
   }
+
+  String _key({required String market, required String ticker, required int year}) =>
+      '$market|$ticker|$year';
 }
