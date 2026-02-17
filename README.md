@@ -27,3 +27,22 @@ Before running the app, generate or copy the required files:
 - `assets/prices/{market}/{ticker}/{year}.json.gz`
 
 The repository keeps only `assets/prices/.gitkeep` to preserve the folder structure.
+
+## Asset loader usage example
+
+```dart
+final PriceAssetIndex assetIndex = const PriceAssetIndex();
+final Top50Repository top50Repository = Top50Repository(assetIndex: assetIndex);
+
+final List<String> keys = await assetIndex.listPriceAssets();
+final List<String> krTickers = await top50Repository.loadTop50Tickers('KR');
+final Object? yearData = await top50Repository.loadYearData(
+  market: 'KR',
+  ticker: krTickers.first,
+  year: 2005,
+);
+```
+
+Added files:
+- `lib/data/assets/price_asset_index.dart`
+- `lib/data/prices/top50_repository.dart`
