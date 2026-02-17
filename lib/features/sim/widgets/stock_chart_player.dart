@@ -5,7 +5,7 @@ import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
-class StockChartPlayer extends StatelessWidget {
+class StockChartPlayer extends StatefulWidget {
   const StockChartPlayer({
     super.key,
     required this.points,
@@ -20,37 +20,72 @@ class StockChartPlayer extends StatelessWidget {
   final String marketCode;
 
   @override
+  State<StockChartPlayer> createState() => _StockChartPlayerState();
+}
+
+class _StockChartPlayerState extends State<StockChartPlayer> {
+  late List<double> _allPercents;
+  late double _minY;
+  late double _maxY;
+  late double _basePrice;
+
+  @override
+  void initState() {
+    super.initState();
+    _recomputeDerivedData();
+  }
+
+  @override
+  void didUpdateWidget(covariant StockChartPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.points, widget.points) || oldWidget.points.length != widget.points.length) {
+      _recomputeDerivedData();
+    }
+  }
+
+  void _recomputeDerivedData() {
+    if (widget.points.isEmpty) {
+      _allPercents = const <double>[];
+      _minY = -1;
+      _maxY = 1;
+      _basePrice = 1;
+      return;
+    }
+
+    _basePrice = widget.points.first.close <= 0 ? 1 : widget.points.first.close;
+    _allPercents = widget.points
+        .map((SimulationPoint point) => ((point.close / _basePrice) - 1) * 100)
+        .toList(growable: false);
+
+    double minY = _allPercents.reduce(min);
+    double maxY = _allPercents.reduce(max);
+    final double rawRange = maxY - minY;
+    final double pad = rawRange < 0.1 ? 1.0 : max(rawRange * 0.08, 0.5);
+    _minY = minY - pad;
+    _maxY = maxY + pad;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (points.isEmpty) {
+    if (widget.points.isEmpty) {
       return const Center(child: Text('표시할 데이터가 없습니다.'));
     }
 
-    final int safeIndex = currentIndex.clamp(0, points.length - 1);
-    final double basePrice = points.first.close <= 0 ? 1 : points.first.close;
-    final List<double> allPercents = points
-        .map((SimulationPoint point) => ((point.close / basePrice) - 1) * 100)
-        .toList(growable: false);
-
-    double minY = allPercents.reduce(min);
-    double maxY = allPercents.reduce(max);
-    final double rawRange = maxY - minY;
-    final double pad = rawRange < 0.1 ? 1.0 : max(rawRange * 0.08, 0.5);
-    minY -= pad;
-    maxY += pad;
+    final int safeIndex = widget.currentIndex.clamp(0, widget.points.length - 1);
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         return CustomPaint(
           size: Size(constraints.maxWidth, constraints.maxHeight),
           painter: _FullPeriodPercentChartPainter(
-            points: points,
-            allPercents: allPercents,
+            points: widget.points,
+            allPercents: _allPercents,
             currentIndex: safeIndex,
-            minY: minY,
-            maxY: maxY,
-            pulse: pulse,
-            basePrice: basePrice,
-            marketCode: marketCode,
+            minY: _minY,
+            maxY: _maxY,
+            pulse: widget.pulse,
+            basePrice: _basePrice,
+            marketCode: widget.marketCode,
           ),
         );
       },

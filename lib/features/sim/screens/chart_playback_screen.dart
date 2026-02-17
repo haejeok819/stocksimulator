@@ -20,10 +20,12 @@ class ChartPlaybackScreen extends StatefulWidget {
     super.key,
     required this.points,
     required this.flowState,
+    required this.initialInvestment,
   });
 
   final List<SimulationPoint> points;
   final SimulationFlowState flowState;
+  final int initialInvestment;
 
   @override
   State<ChartPlaybackScreen> createState() => _ChartPlaybackScreenState();
@@ -38,15 +40,14 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   bool _showSkip = false;
 
   int _index = 0;
-  double _accumulated = 0;
   double _pulseTime = 0;
   bool _playing = true;
   double _speed = 1;
-  int _uiThrottleCounter = 0;
 
   @override
   void initState() {
     super.initState();
+    _speed = 1;
     AdService.instance.preloadInterstitial();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -72,11 +73,17 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     return defaultTargetPlatform == TargetPlatform.windows;
   }
 
-  double get _stepPerTick {
-    final double years = widget.flowState.endDate.difference(widget.flowState.startDate).inDays / 365;
-    if (years < 1) return 0.016 / 0.2;
-    if (years < 5) return 0.016 / 0.05;
-    return 0.016 / 0.01;
+  int get _playbackTickMs => _isWindowsDesktop ? 40 : 16;
+
+  int get _baseStepSize {
+    final int totalDays = widget.points.length;
+    if (totalDays <= 252) {
+      return _isWindowsDesktop ? 2 : 1;
+    }
+    if (totalDays <= 1260) {
+      return _isWindowsDesktop ? 6 : 4;
+    }
+    return _isWindowsDesktop ? 18 : 12;
   }
 
   void _startPlayback() {
@@ -91,32 +98,29 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       }
     });
 
-    final int intervalMs = _isWindowsDesktop ? 160 : 16;
-    _ticker = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
+    _ticker = Timer.periodic(Duration(milliseconds: _playbackTickMs), (_) {
       if (!mounted || !_playing) return;
 
+      final int maxIndex = widget.points.length - 1;
+      final int speedMultiplier = _speed.round().clamp(1, 8);
+      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 3).round().clamp(1, 240);
+
       int nextIndex = _index;
-      double nextPulse = _pulseTime + 0.16;
+      final double nextPulse = _pulseTime + 0.16;
       if (AppSettings.chartMotionEnabled.value) {
-        _accumulated += (_stepPerTick * _speed);
-        final int step = _accumulated.floor();
-        if (step > 0) {
-          _accumulated -= step;
-          nextIndex = min(_index + step, widget.points.length - 1);
-        }
+        nextIndex = min(_index + stepSize, maxIndex);
       } else {
-        nextIndex = min(_index + _speed.round().clamp(1, 3), widget.points.length - 1);
+        nextIndex = min(_index + max(1, speedMultiplier ~/ 2), maxIndex);
       }
 
-      final bool shouldUpdateUi = !_isWindowsDesktop || (++_uiThrottleCounter % 3 == 0) || nextIndex >= widget.points.length - 1;
       _index = nextIndex;
       _pulseTime = nextPulse;
 
-      if (shouldUpdateUi && mounted) {
+      if (mounted) {
         setState(() {});
       }
 
-      if (_index >= widget.points.length - 1) {
+      if (_index >= maxIndex) {
         _ticker?.cancel();
         _showResult();
       }
@@ -172,8 +176,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     }
 
     final int finalAmount = widget.points.last.value.round();
-    final int profit = finalAmount - widget.flowState.investment;
-    final double profitRate = (profit / widget.flowState.investment) * 100;
+    final int investedAmount = widget.initialInvestment;
+    final int profit = finalAmount - investedAmount;
+    final double profitRate = investedAmount == 0 ? 0 : (profit / investedAmount) * 100;
 
     await _historyRepository.append(
       SimulationResult(
@@ -192,7 +197,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       barrierDismissible: true,
       builder: (BuildContext context) {
         return _ResultDialog(
-          initialAmount: widget.flowState.investment,
+          initialAmount: investedAmount,
           finalAmount: finalAmount,
           profit: profit,
           profitRate: profitRate,
@@ -228,6 +233,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     final bool hasData = widget.points.isNotEmpty;
     final SimulationPoint current = hasData ? widget.points[_index] : const SimulationPoint(ymd: 0, close: 0, value: 0);
     final String marketCode = widget.flowState.marketCode;
+    final String startPriceText = hasData ? _formatPriceByMarket(widget.points.first.close, marketCode) : '-';
+    final String endPriceText = hasData ? _formatPriceByMarket(widget.points.last.close, marketCode) : '-';
 
     return Scaffold(
       appBar: AppBar(title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생', style: PlaybackDesignTokens.title)),
@@ -248,8 +255,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: <Widget>[
-                  Text('시작 ${_formatPriceByMarket(widget.points.first.close, marketCode)}', style: PlaybackDesignTokens.secondary),
-                  Text('종료 ${_formatPriceByMarket(widget.points.last.close, marketCode)}', style: PlaybackDesignTokens.secondary),
+                  Text('시작 $startPriceText', style: PlaybackDesignTokens.secondary),
+                  Text('종료 $endPriceText', style: PlaybackDesignTokens.secondary),
                 ],
               ),
               const SizedBox(height: 12),
@@ -292,7 +299,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 segments: const <ButtonSegment<double>>[
                   ButtonSegment<double>(value: 1, label: Text('1x')),
                   ButtonSegment<double>(value: 2, label: Text('2x')),
-                  ButtonSegment<double>(value: 3, label: Text('3x')),
+                  ButtonSegment<double>(value: 4, label: Text('4x')),
+                  ButtonSegment<double>(value: 8, label: Text('8x')),
                 ],
                 selected: <double>{_speed},
                 onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
