@@ -31,6 +31,83 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
 
   StockMarket _market = StockMarket.kr;
   String _query = '';
+  int _placeholderIndex = 0;
+  Timer? _placeholderTimer;
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _placeholderTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || _query.isNotEmpty) return;
+      setState(() {
+        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
+      });
+    });
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _safeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
 
   bool get _safeMode {
     if (kIsWeb) return true;
@@ -42,6 +119,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
 
   @override
   void dispose() {
+    _placeholderTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
