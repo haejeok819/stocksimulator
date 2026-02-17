@@ -15,3 +15,52 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+
+## Local price assets
+
+Price/meta asset files under `assets/prices/` are generated locally and intentionally excluded from version control.
+
+Before running the app, generate or copy the required files:
+
+- `assets/prices/{market}/_top50_meta.json`
+- `assets/prices/{market}/{ticker}/meta.json`
+- `assets/prices/{market}/{ticker}/{year}.json.gz`
+
+The repository keeps only `assets/prices/.gitkeep` to preserve the folder structure.
+
+## Asset loader usage example
+
+```dart
+final PriceAssetIndex assetIndex = const PriceAssetIndex();
+final Top50Repository top50Repository = Top50Repository(assetIndex: assetIndex);
+
+final List<String> keys = await assetIndex.listPriceAssets();
+final List<String> krTickers = await top50Repository.loadTop50Tickers('KR');
+final Object? yearData = await top50Repository.loadYearData(
+  market: 'KR',
+  ticker: krTickers.first,
+  year: 2005,
+);
+```
+
+Added files:
+- `lib/data/assets/price_asset_index.dart`
+- `lib/data/prices/top50_repository.dart`
+
+## Flat price asset structure (refactor target)
+
+```text
+assets/prices/KR_top50_meta.json
+assets/prices/US_top50_meta.json
+assets/prices/KR_{ticker}_{year}.json.gz
+assets/prices/US_{ticker}_{year}.json.gz
+```
+
+### pubspec.yaml (required assets section)
+
+```yaml
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/prices/
+```

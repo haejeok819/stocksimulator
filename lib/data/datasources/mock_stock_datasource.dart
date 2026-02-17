@@ -32,25 +32,29 @@ class MockStockDataSource {
       'AMD',
     ];
 
+    final String marketCode = market == StockMarket.kr ? 'KR' : 'US';
+
     return List<StockModel>.generate(100, (int index) {
       final int rank = index + 1;
       if (market == StockMarket.kr) {
         final String base = krNames[index % krNames.length];
-        final String symbol = (5930 + index).toString().padLeft(6, '0');
+        final String ticker = (5930 + index).toString().padLeft(6, '0');
         return StockModel(
-          symbol: symbol,
-          name: '$base ${rank}위',
-          market: market,
+          ticker: ticker,
+          nameKo: '$base ${rank}위',
+          nameEn: '',
+          market: marketCode,
           rank: rank,
         );
       }
 
       final String base = usNames[index % usNames.length];
-      final String symbol = '${base.substring(0, min(4, base.length)).toUpperCase()}$rank';
+      final String ticker = '${base.substring(0, min(4, base.length)).toUpperCase()}$rank';
       return StockModel(
-        symbol: symbol,
-        name: '$base #$rank',
-        market: market,
+        ticker: ticker,
+        nameKo: '',
+        nameEn: '$base #$rank',
+        market: marketCode,
         rank: rank,
       );
     });
