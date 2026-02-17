@@ -299,7 +299,8 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                       segments: const <ButtonSegment<double>>[
                         ButtonSegment<double>(value: 1, label: Text('1x')),
                         ButtonSegment<double>(value: 2, label: Text('2x')),
-                        ButtonSegment<double>(value: 3, label: Text('3x')),
+                        ButtonSegment<double>(value: 4, label: Text('4x')),
+                        ButtonSegment<double>(value: 8, label: Text('8x')),
                       ],
                       selected: <double>{playback.speed},
                       onSelectionChanged: (Set<double> value) => ref.read(battlePlaybackControllerProvider.notifier).setSpeed(value.first),
