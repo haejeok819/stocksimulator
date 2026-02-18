@@ -223,10 +223,18 @@ class _DateRangeScreenState extends State<DateRangeScreen> with SingleTickerProv
                           style: TextStyle(color: Color(0xFFA1A1A8), fontSize: 12),
                         ),
                         const SizedBox(height: 6),
-                        Text(
-                          '${_formatYmd(_tradingDaysYmd.first)} ~ ${_formatYmd(_tradingDaysYmd.last)}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        SizedBox(
+                          height: 22,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${_formatYmd(_tradingDaysYmd.first)} ~ ${_formatYmd(_tradingDaysYmd.last)}',
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         ElevatedButton(
