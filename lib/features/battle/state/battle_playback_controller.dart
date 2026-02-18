@@ -67,6 +67,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   void start() {
     _countdownTimer?.cancel();
     _playbackTimer?.cancel();
+    _pendingStartTimer?.cancel();
     state = state.copyWith(
       status: BattlePlaybackStatus.ready,
       index: 0,
@@ -78,6 +79,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
       final int current = state.countdown;
       if (current <= 1) {
         timer.cancel();
+        _countdownTimer = null;
         state = state.copyWith(showCountdown: false, countdown: 0);
         _runPlayback();
       } else {
@@ -139,6 +141,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     _pendingStartTimer?.cancel();
 
     void launch() {
+      _pendingStartTimer = null;
       _playbackTimer = Timer.periodic(Duration(milliseconds: _playbackTickMs()), (Timer timer) {
         final int next = min(state.index + step, data.length - 1);
         final bool ended = next >= data.length - 1;

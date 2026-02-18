@@ -287,16 +287,26 @@ class _PresetChip extends StatelessWidget {
           ),
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
-          child: Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            ),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final double adaptiveFontSize = (constraints.maxWidth * 0.16).clamp(10.5, 14.0);
+              return SizedBox(
+                height: 18,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: adaptiveFontSize,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

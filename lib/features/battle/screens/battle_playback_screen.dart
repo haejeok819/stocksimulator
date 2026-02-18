@@ -465,38 +465,43 @@ class _LeaderCardState extends State<_LeaderCard> with SingleTickerProviderState
       builder: (_, __) {
         final double t = _flipController.value;
         final double angle = t * pi;
+        final bool isBackFace = angle > (pi / 2);
         final bool sparkle = t > 0 && t < 0.65;
 
         return Transform(
           alignment: Alignment.center,
           transform: Matrix4.identity()..setEntry(3, 2, 0.0015)..rotateY(angle),
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 220),
-            opacity: widget.leader ? 1 : 0.85,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                color: widget.leader ? widget.leaderTint : const Color(0xFF2A2A33),
-                border: Border.all(color: widget.leader ? widget.leaderBorder : Colors.transparent),
-                boxShadow: widget.leader
-                    ? <BoxShadow>[
-                        BoxShadow(color: widget.leaderBorder.withOpacity(0.35), blurRadius: 16, spreadRadius: 1),
-                        if (sparkle) BoxShadow(color: Colors.white.withOpacity(0.55), blurRadius: 20, spreadRadius: 2),
-                      ]
-                    : <BoxShadow>[],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text('${widget.label} · ${widget.ticker}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
-                  const SizedBox(height: 4),
-                  Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 8),
-                  Text('₩ ${_fmt(widget.value)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  Text(AppNumberFormat.formatPercent(widget.rate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                ],
+          child: Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()..rotateY(isBackFace ? pi : 0),
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 220),
+              opacity: widget.leader ? 1 : 0.85,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: widget.leader ? widget.leaderTint : const Color(0xFF2A2A33),
+                  border: Border.all(color: widget.leader ? widget.leaderBorder : Colors.transparent),
+                  boxShadow: widget.leader
+                      ? <BoxShadow>[
+                          BoxShadow(color: widget.leaderBorder.withOpacity(0.35), blurRadius: 16, spreadRadius: 1),
+                          if (sparkle) BoxShadow(color: Colors.white.withOpacity(0.55), blurRadius: 20, spreadRadius: 2),
+                        ]
+                      : <BoxShadow>[],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('${widget.label} · ${widget.ticker}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+                    const SizedBox(height: 4),
+                    Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 8),
+                    Text('₩ ${_fmt(widget.value)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    Text(AppNumberFormat.formatPercent(widget.rate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  ],
+                ),
               ),
             ),
           ),
