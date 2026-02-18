@@ -20,6 +20,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
   final StockRepository _repository = StockRepository();
   final SimulationFlowState _flow = SimulationFlowState();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _stockListScrollController = ScrollController();
 
   static const List<String> _placeholders = <String>[
     '삼성 vs 애플, 뭐가 더 올랐을까?',
@@ -31,8 +32,6 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
 
   StockMarket _market = StockMarket.kr;
   String _query = '';
-  int _placeholderIndex = 0;
-  Timer? _placeholderTimer;
 
   bool get _safeMode {
     if (kIsWeb) return true;
@@ -43,22 +42,9 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _placeholderTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!mounted || _query.isNotEmpty) return;
-      setState(() {
-        _placeholderIndex = (_placeholderIndex + 1) % _placeholders.length;
-      });
-    });
-  }
-
-
-
-  @override
   void dispose() {
-    _placeholderTimer?.cancel();
     _searchController.dispose();
+    _stockListScrollController.dispose();
     super.dispose();
   }
 
@@ -143,6 +129,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                       }
 
                       return ListView.separated(
+                        controller: _stockListScrollController,
                         padding: const EdgeInsets.only(bottom: 24),
                         itemCount: stocks.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
