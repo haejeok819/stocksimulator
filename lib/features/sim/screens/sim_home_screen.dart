@@ -274,8 +274,9 @@ class _AssetFilterToggle extends StatelessWidget {
       height: 42,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF5677E7),
+        color: const Color(0xFF262836),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x334A4F6A)),
       ),
       child: Row(
         children: _AssetFilter.values.map((_AssetFilter filter) {
@@ -288,14 +289,14 @@ class _AssetFilterToggle extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF5677E7) : Colors.transparent,
+                  color: isSelected ? const Color(0xFF5677E7) : const Color(0xFF1E202C),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   filter.label,
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    color: isSelected ? Colors.white : const Color(0xFFA7ADBE),
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),

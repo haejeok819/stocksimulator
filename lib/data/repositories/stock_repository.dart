@@ -224,8 +224,7 @@ class StockRepository {
 
         final List<StockModel> loaded;
         if (assetType == AssetType.stockKR) {
-          final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
-          final Set<String> krKeys = typedIndex[AssetType.stockKR]?.keys.toSet() ?? <String>{};
+          final Set<String> krKeys = await _loadKrIndexKeys();
 
           final List<StockModel> normalized = typedMetaList
               .asMap()
@@ -273,29 +272,38 @@ class StockRepository {
     }
 
     if (assetType == AssetType.stockKR) {
-      final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
-      final List<String> sortedKrKeys = (typedIndex[AssetType.stockKR]?.keys.toList() ?? <String>[])..sort();
-      final List<StockModel> fallback = sortedKrKeys
-          .asMap()
-          .entries
-          .map(
-            (MapEntry<int, String> entry) => StockModel.fromJson(
-              <String, dynamic>{
-                'code6': entry.value,
-                'ticker': entry.value,
-                'name_ko': '종목 ${entry.value}',
-                'name_en': '종목 ${entry.value}',
-              },
-              rank: entry.key + 1,
-              assetType: assetType,
-            ),
-          )
-          .toList();
+      final List<StockModel> fallback = await _buildKrFallbackStocks();
       _stockCache[cacheKey] = fallback;
       return fallback;
     }
 
     throw StateError('메타 파일이 없습니다');
+  }
+
+
+  Future<Set<String>> _loadKrIndexKeys() async {
+    final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
+    return typedIndex[AssetType.stockKR]?.keys.toSet() ?? <String>{};
+  }
+
+  Future<List<StockModel>> _buildKrFallbackStocks() async {
+    final List<String> sortedKrKeys = (await _loadKrIndexKeys()).toList()..sort();
+    return sortedKrKeys
+        .asMap()
+        .entries
+        .map(
+          (MapEntry<int, String> entry) => StockModel.fromJson(
+            <String, dynamic>{
+              'code6': entry.value,
+              'ticker': entry.value,
+              'name_ko': '종목 ${entry.value}',
+              'name_en': '종목 ${entry.value}',
+            },
+            rank: entry.key + 1,
+            assetType: AssetType.stockKR,
+          ),
+        )
+        .toList();
   }
 
 
