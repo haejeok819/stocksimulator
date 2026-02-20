@@ -220,14 +220,7 @@ class StockRepository {
     for (final String path in candidates) {
       try {
         final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
-        if (decodedObject is! List<Object?>) {
-          continue;
-        }
-
-        final List<Map<String, dynamic>> typedMetaList = decodedObject
-            .whereType<Map>()
-            .map((Map<Object?, Object?> row) => Map<String, dynamic>.from(row))
-            .toList();
+        final List<Map<String, dynamic>> typedMetaList = _coerceMetaRows(decodedObject);
 
         final List<StockModel> loaded;
         if (assetType == AssetType.stockKR) {
@@ -305,10 +298,27 @@ class StockRepository {
     throw StateError('메타 파일이 없습니다');
   }
 
+
+  List<Map<String, dynamic>> _coerceMetaRows(Object? decodedObject) {
+    if (decodedObject is List<Object?>) {
+      return decodedObject
+          .whereType<Map>()
+          .map((Map<Object?, Object?> row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    if (decodedObject is Map<Object?, Object?>) {
+      return <Map<String, dynamic>>[Map<String, dynamic>.from(decodedObject)];
+    }
+
+    return <Map<String, dynamic>>[];
+  }
+
   String _resolveKrDisplayName(Map<String, dynamic> row, String code6) {
     final List<String> candidates = <String>[
       (row['name_ko'] as String? ?? '').trim(),
       (row['name_en'] as String? ?? '').trim(),
+      (row['name_k'] as String? ?? '').trim(),
       (row['displayName'] as String? ?? '').trim(),
       (row['name'] as String? ?? '').trim(),
       (row['corp_name'] as String? ?? '').trim(),
