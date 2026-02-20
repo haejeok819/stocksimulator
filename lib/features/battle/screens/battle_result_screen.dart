@@ -78,7 +78,7 @@ class BattleResultScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: <Widget>[
             Text('${_fmt(finalValue)}원'),
-            Text(AppNumberFormat.formatPercent(finalRate)),
+            Text('수익률 ${AppNumberFormat.formatPercent(finalRate)}'),
           ],
         ),
       ],

@@ -84,7 +84,7 @@ class _BattleTickerCompareSection extends StatelessWidget {
           tint: const Color(0x22E54B4B),
           borderColor: const Color(0x66E54B4B),
           labelColor: const Color(0xFFE54B4B),
-          market: setup.stockA?.market == 'KR' ? StockMarket.kr : StockMarket.us,
+          market: StockMarket.kr,
         ),
         const SizedBox(height: 12),
         const _VsBadge(),
@@ -95,7 +95,7 @@ class _BattleTickerCompareSection extends StatelessWidget {
           tint: const Color(0x22266DD3),
           borderColor: const Color(0x66266DD3),
           labelColor: const Color(0xFF266DD3),
-          market: setup.stockB?.market == 'KR' ? StockMarket.kr : StockMarket.us,
+          market: StockMarket.kr,
         ),
       ],
     );
@@ -199,7 +199,6 @@ class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                       child: SegmentedButton<StockMarket>(
                         segments: const <ButtonSegment<StockMarket>>[
-                          ButtonSegment<StockMarket>(value: StockMarket.us, label: Text('US')),
                           ButtonSegment<StockMarket>(value: StockMarket.kr, label: Text('KR')),
                         ],
                         selected: <StockMarket>{selectedMarket},
@@ -562,6 +561,10 @@ class _BattleAutoSafeModeInfo extends StatelessWidget {
 }
 
 class BattleStartButtons extends ConsumerWidget {
+  bool _isSameAsset(StockModel a, StockModel b) {
+    return a.assetType == b.assetType && a.assetKey == b.assetKey;
+  }
+
   const BattleStartButtons({super.key, required this.setup, required this.pulse});
 
   final BattleSetupState setup;
@@ -569,9 +572,7 @@ class BattleStartButtons extends ConsumerWidget {
 
   Future<void> _randomMatching(WidgetRef ref) async {
     final StockRepository repository = ref.read(battleStockRepositoryProvider);
-    final List<StockModel> usStocks = await repository.getTopStocks(market: StockMarket.us);
-    final List<StockModel> krStocks = await repository.getTopStocks(market: StockMarket.kr);
-    final List<StockModel> stocks = <StockModel>[...usStocks, ...krStocks];
+    final List<StockModel> stocks = await repository.getTopStocks(market: StockMarket.kr);
 
     if (stocks.length < 2) {
       return;
@@ -581,7 +582,7 @@ class BattleStartButtons extends ConsumerWidget {
     final StockModel a = stocks[random.nextInt(stocks.length)];
     StockModel b = stocks[random.nextInt(stocks.length)];
 
-    while (a.ticker == b.ticker) {
+    while (_isSameAsset(a, b)) {
       b = stocks[random.nextInt(stocks.length)];
     }
 
@@ -619,8 +620,8 @@ class BattleStartButtons extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('종목 A/B를 선택하세요.')));
                   return;
                 }
-                if (setup.stockA!.ticker == setup.stockB!.ticker) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('동일 종목은 선택할 수 없습니다.')));
+                if (_isSameAsset(setup.stockA!, setup.stockB!)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('동일 자산은 선택할 수 없습니다.')));
                   return;
                 }
                 ref.invalidate(battleDataProvider);

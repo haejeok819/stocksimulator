@@ -15,9 +15,42 @@ class StockRepository {
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
-  Future<List<StockModel>> getTopStocks({required StockMarket market, String query = ''}) async {
-    final String marketCode = market == StockMarket.kr ? 'KR' : 'US';
-    final List<StockModel> all = await _loadTopMetaByMarket(marketCode);
+  static const StockModel _goldStock = StockModel(
+    ticker: 'KRX',
+    assetType: AssetType.gold,
+    assetKey: 'KRX',
+    nameKo: '금(KRX)',
+    nameEn: 'Gold(KRX)',
+    rank: 1,
+  );
+
+  static const StockModel _fxStock = StockModel(
+    ticker: 'USD_KRW',
+    assetType: AssetType.fx,
+    assetKey: 'USD_KRW',
+    nameKo: '달러/원 환율',
+    nameEn: 'USD/KRW',
+    rank: 1,
+  );
+
+
+  Future<List<StockModel>> getTopStocks({
+    AssetType assetType = AssetType.stockKR,
+    StockMarket? market,
+    String query = '',
+  }) async {
+    final AssetType resolvedAssetType = market?.assetType ?? assetType;
+
+    final List<StockModel> all = switch (resolvedAssetType) {
+      AssetType.stockKR => <StockModel>[
+          ...await _loadTopMetaByAssetType(AssetType.stockKR),
+          _goldStock,
+          _fxStock,
+        ],
+      AssetType.gold => <StockModel>[_goldStock],
+      AssetType.fx => <StockModel>[_fxStock],
+    };
+
     final String normalized = query.trim().toLowerCase();
     if (normalized.isEmpty) {
       return all;
@@ -25,14 +58,17 @@ class StockRepository {
     return all.where((StockModel stock) => stock.matchesQuery(normalized)).toList();
   }
 
-  Future<List<int>> loadTradingDaysYmd({required String market, required String ticker}) async {
-    final String cacheKey = '$market|$ticker';
+  Future<List<int>> loadTradingDays({required AssetType assetType, required String assetKey}) async {
+    final String cacheKey = '${assetType.code}|$assetKey';
     final List<int>? cached = _tradingDaysCache[cacheKey];
     if (cached != null) {
       return cached;
     }
 
-    final List<int> availableYears = await _priceRepository.availableYears(market: market, ticker: ticker);
+    final List<int> availableYears = await _priceRepository.availableYearsByAsset(
+      assetType: assetType,
+      assetKey: assetKey,
+    );
     if (availableYears.isEmpty) {
       _tradingDaysCache[cacheKey] = <int>[];
       return <int>[];
@@ -45,9 +81,9 @@ class StockRepository {
     final Set<int> mergedDays = <int>{};
     for (int year = minYear; year <= maxYear; year++) {
       try {
-        final Object? decoded = await _priceRepository.loadYearData(
-          market: market,
-          ticker: ticker,
+        final Object? decoded = await _priceRepository.loadYearDataByAsset(
+          assetType: assetType,
+          assetKey: assetKey,
           year: year,
         );
         if (decoded is! List<Object?>) {
@@ -61,7 +97,7 @@ class StockRepository {
           mergedDays.add((row[0] as num).toInt());
         }
       } catch (error) {
-        debugPrint('Trading day scan skipped: market=$market, ticker=$ticker, year=$year ($error)');
+        debugPrint('Trading day scan skipped: assetType=$assetType, assetKey=$assetKey, year=$year ($error)');
       }
     }
 
@@ -70,15 +106,33 @@ class StockRepository {
     return sortedDays;
   }
 
+  Future<List<int>> loadTradingDaysYmd({required String market, required String ticker}) {
+    return loadTradingDays(assetType: assetTypeFromCode(market), assetKey: ticker);
+  }
+
+  Future<List<PricePoint>> loadRangeByAsset({
+    required AssetType assetType,
+    required String assetKey,
+    required DateTime start,
+    required DateTime end,
+  }) {
+    return _priceRepository.loadSeriesByAsset(
+      assetType: assetType,
+      assetKey: assetKey,
+      start: start,
+      end: end,
+    );
+  }
+
   Future<List<PricePoint>> loadRange({
     required String market,
     required String ticker,
     required DateTime start,
     required DateTime end,
   }) {
-    return _priceRepository.loadSeries(
-      market: market,
-      ticker: ticker,
+    return loadRangeByAsset(
+      assetType: assetTypeFromCode(market),
+      assetKey: ticker,
       start: start,
       end: end,
     );
@@ -118,7 +172,6 @@ class StockRepository {
         .toList();
   }
 
-
   List<SimulationPoint> toSimulationSeriesWithEvents({
     required List<PricePoint> prices,
     required Map<int, int> investEventsByYmd,
@@ -154,13 +207,14 @@ class StockRepository {
     return points;
   }
 
-  Future<List<StockModel>> _loadTopMetaByMarket(String market) async {
-    final List<StockModel>? cached = _stockCache[market];
+  Future<List<StockModel>> _loadTopMetaByAssetType(AssetType assetType) async {
+    final String cacheKey = assetType.code;
+    final List<StockModel>? cached = _stockCache[cacheKey];
     if (cached != null) {
       return cached;
     }
 
-    final String path = AssetPaths.assetPathMetaList(market);
+    final String path = AssetPaths.assetPathMetaListByAsset(assetType);
     try {
       final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
       if (decodedObject is! List<Object?>) {
@@ -168,10 +222,7 @@ class StockRepository {
       }
 
       final List<Map<String, dynamic>> typedMetaList =
-          (decodedObject
-                  .whereType<Map>()
-                  .map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e))
-                  .toList())
+          (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
               .asMap()
               .entries
               .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
@@ -182,12 +233,12 @@ class StockRepository {
           .entries
           .map(
             (MapEntry<int, Map<String, dynamic>> entry) =>
-                StockModel.fromJson(entry.value, rank: entry.key + 1, market: market),
+                StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
           )
           .where((StockModel stock) => stock.ticker.isNotEmpty)
           .toList();
 
-      _stockCache[market] = loaded;
+      _stockCache[cacheKey] = loaded;
       return loaded;
     } catch (error) {
       debugPrint('Top meta load failed: $path ($error)');

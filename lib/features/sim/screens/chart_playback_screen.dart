@@ -217,9 +217,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
 
   String _formatPriceByMarket(double price, String marketCode) {
-    if (marketCode == 'US') {
-      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
-    }
     return '${AppNumberFormat.formatInt(price)}원';
   }
 

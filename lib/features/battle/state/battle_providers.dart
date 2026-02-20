@@ -5,6 +5,15 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/battle/state/battle_data_normalizer.dart';
 
+
+double calculateReturnPct({required double startValue, required double endValue}) {
+  if (startValue == 0) {
+    return 0;
+  }
+  return ((endValue / startValue) - 1) * 100;
+}
+
+
 class BattleSetupState {
   const BattleSetupState({
     required this.stockA,
@@ -182,8 +191,14 @@ FutureProvider.autoDispose<BattleSeriesData>((ref) async {
 
   final List<double> valuesA = normalized.closeA.map((double close) => sharesA * close).toList(growable: false);
   final List<double> valuesB = normalized.closeB.map((double close) => sharesB * close).toList(growable: false);
-  final List<double> returnsA = normalized.closeA.map((double close) => ((close / normalized.closeA.first) - 1) * 100).toList(growable: false);
-  final List<double> returnsB = normalized.closeB.map((double close) => ((close / normalized.closeB.first) - 1) * 100).toList(growable: false);
+  final double startValueA = valuesA.first;
+  final double startValueB = valuesB.first;
+  final List<double> returnsA = valuesA
+      .map((double endValue) => calculateReturnPct(startValue: startValueA, endValue: endValue))
+      .toList(growable: false);
+  final List<double> returnsB = valuesB
+      .map((double endValue) => calculateReturnPct(startValue: startValueB, endValue: endValue))
+      .toList(growable: false);
 
   return BattleSeriesData(
     normalized: normalized,
