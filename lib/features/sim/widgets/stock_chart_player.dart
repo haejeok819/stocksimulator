@@ -41,6 +41,12 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
   late double _basePrice;
   double? _smoothedMinY;
   double? _smoothedMaxY;
+  double? _targetMinY;
+  double? _targetMaxY;
+  double? _axisStep;
+  int _shrinkHoldFrames = 0;
+  int _stableInsideFrames = 0;
+  int _lastVisibleCount = 0;
 
   static const double _kLineStroke = 2.7;
   static const double _kPointRadius = 4.8;
@@ -59,6 +65,12 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
       _recomputeDerivedData();
       _smoothedMinY = null;
       _smoothedMaxY = null;
+      _targetMinY = null;
+      _targetMaxY = null;
+      _axisStep = null;
+      _shrinkHoldFrames = 0;
+      _stableInsideFrames = 0;
+      _lastVisibleCount = 0;
     }
   }
 
@@ -126,22 +138,77 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
       targetMax = mid + minVisualRange / 2;
     }
 
-    if (_smoothedMinY == null) {
-      _smoothedMinY = targetMin;
+    final int visibleCount = renderEndIndex - visibleStart + 1;
+    final bool windowGrowing = visibleCount > _lastVisibleCount;
+    _lastVisibleCount = visibleCount;
+
+    if (_targetMinY == null || _targetMaxY == null) {
+      _targetMinY = targetMin;
+      _targetMaxY = targetMax;
+      _shrinkHoldFrames = 20;
     } else {
-      final double lowerT = targetMin < _smoothedMinY! ? 0.35 : 0.08;
-      _smoothedMinY = ui.lerpDouble(_smoothedMinY, targetMin, lowerT)!;
+      final double currentTargetRange = max(_targetMaxY! - _targetMinY!, minVisualRange);
+      final double minDeltaRatio = (targetMin - _targetMinY!).abs() / currentTargetRange;
+      final double maxDeltaRatio = (targetMax - _targetMaxY!).abs() / currentTargetRange;
+      final bool inDeadband = minDeltaRatio < 0.015 && maxDeltaRatio < 0.015;
+      if (inDeadband) {
+        targetMin = _targetMinY!;
+        targetMax = _targetMaxY!;
+      }
+
+      final bool expansionRequested = targetMin < _targetMinY! || targetMax > _targetMaxY!;
+      if (expansionRequested || windowGrowing) {
+        _targetMinY = min(_targetMinY!, targetMin);
+        _targetMaxY = max(_targetMaxY!, targetMax);
+        _shrinkHoldFrames = windowGrowing ? 24 : 14;
+        _stableInsideFrames = 0;
+      } else {
+        if (_shrinkHoldFrames > 0) {
+          _shrinkHoldFrames -= 1;
+        }
+        final double comfortMargin = currentTargetRange * 0.20;
+        final bool comfortablyInside =
+            minY > _targetMinY! + comfortMargin && maxY < _targetMaxY! - comfortMargin;
+        _stableInsideFrames = comfortablyInside ? _stableInsideFrames + 1 : 0;
+        if (_shrinkHoldFrames == 0 && _stableInsideFrames >= 10) {
+          _targetMinY = ui.lerpDouble(_targetMinY, targetMin, 0.06)!;
+          _targetMaxY = ui.lerpDouble(_targetMaxY, targetMax, 0.06)!;
+        }
+      }
+    }
+
+    if (_smoothedMinY == null) {
+      _smoothedMinY = _targetMinY;
+    } else {
+      final double lowerT = _targetMinY! < _smoothedMinY! ? 0.35 : 0.08;
+      _smoothedMinY = ui.lerpDouble(_smoothedMinY, _targetMinY, lowerT)!;
     }
 
     if (_smoothedMaxY == null) {
-      _smoothedMaxY = targetMax;
+      _smoothedMaxY = _targetMaxY;
     } else {
-      final double upperT = targetMax > _smoothedMaxY! ? 0.35 : 0.08;
-      _smoothedMaxY = ui.lerpDouble(_smoothedMaxY, targetMax, upperT)!;
+      final double upperT = _targetMaxY! > _smoothedMaxY! ? 0.35 : 0.08;
+      _smoothedMaxY = ui.lerpDouble(_smoothedMaxY, _targetMaxY, upperT)!;
     }
 
     final double smoothedRange = max(_smoothedMaxY! - _smoothedMinY!, minVisualRange);
-    final double guardBand = max(smoothedRange * 0.12, baseHeadroom * 0.45);
+    final double desiredStep = max(smoothedRange / 3, minVisualRange / 3);
+    if (_axisStep == null) {
+      _axisStep = desiredStep;
+    } else {
+      final double stepDeltaRatio = (desiredStep - _axisStep!).abs() / max(_axisStep!, 0.0001);
+      if (stepDeltaRatio > 0.12) {
+        _axisStep = ui.lerpDouble(_axisStep, desiredStep, 0.28)!;
+      }
+    }
+
+    final double midY = (_smoothedMinY! + _smoothedMaxY!) / 2;
+    final double half = max((_axisStep ?? desiredStep) * 1.5, minVisualRange / 2);
+    _smoothedMinY = midY - half;
+    _smoothedMaxY = midY + half;
+
+    final double stabilizedRange = max(_smoothedMaxY! - _smoothedMinY!, minVisualRange);
+    final double guardBand = max(stabilizedRange * 0.12, baseHeadroom * 0.45);
     if (maxY > _smoothedMaxY! - guardBand) {
       _smoothedMaxY = maxY + guardBand;
     }
