@@ -246,6 +246,11 @@ class StockRepository {
                 }
                 final Map<String, dynamic> normalizedJson = Map<String, dynamic>.from(entry.value);
                 normalizedJson['ticker'] = code6;
+                final String resolvedName = _resolveKrDisplayName(entry.value, code6);
+                normalizedJson['name_ko'] = resolvedName;
+                if ((normalizedJson['name_en'] as String? ?? '').trim().isEmpty) {
+                  normalizedJson['name_en'] = resolvedName;
+                }
                 return StockModel.fromJson(normalizedJson, rank: entry.key + 1, assetType: assetType);
               })
               .whereType<StockModel>()
@@ -256,30 +261,13 @@ class StockRepository {
           );
           debugPrint("[TopMeta] indexKRCount=${krKeys.length}, contains000270=${krKeys.contains('000270')}");
 
-          final bool usingFallback = typedMetaList.isEmpty;
-          if (usingFallback) {
-            final List<String> sortedKrKeys = krKeys.toList()..sort();
-            loaded = sortedKrKeys
-                .asMap()
-                .entries
-                .map(
-                  (MapEntry<int, String> entry) => StockModel.fromJson(
-                    <String, dynamic>{
-                      'code6': entry.value,
-                      'ticker': entry.value,
-                      'name_ko': entry.value,
-                      'name_en': entry.value,
-                    },
-                    rank: entry.key + 1,
-                    assetType: assetType,
-                  ),
-                )
-                .toList();
-          } else {
-            loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+          if (typedMetaList.isEmpty) {
+            continue;
           }
 
-          debugPrint('[TopMeta] usingFallback=$usingFallback');
+          loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+
+          debugPrint('[TopMeta] usingFallback=false');
           debugPrint('[TopMeta] finalListCount=${loaded.length}');
         } else {
           loaded = typedMetaList
@@ -311,8 +299,8 @@ class StockRepository {
               <String, dynamic>{
                 'code6': entry.value,
                 'ticker': entry.value,
-                'name_ko': entry.value,
-                'name_en': entry.value,
+                'name_ko': '종목 ${entry.value}',
+                'name_en': '종목 ${entry.value}',
               },
               rank: entry.key + 1,
               assetType: assetType,
@@ -326,6 +314,24 @@ class StockRepository {
     }
 
     throw StateError('메타 파일이 없습니다');
+  }
+
+
+  String _resolveKrDisplayName(Map<String, dynamic> row, String code6) {
+    final List<String> candidates = <String>[
+      (row['name_ko'] as String? ?? '').trim(),
+      (row['name_en'] as String? ?? '').trim(),
+      (row['displayName'] as String? ?? '').trim(),
+      (row['name'] as String? ?? '').trim(),
+      (row['corp_name'] as String? ?? '').trim(),
+    ];
+
+    for (final String candidate in candidates) {
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+    return '종목 $code6';
   }
 
   String? _normalizeKrCode6(Map<String, dynamic> row) {
