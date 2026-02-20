@@ -38,7 +38,7 @@ class Top50Repository {
   }) async {
     _validateMarket(market);
 
-    final String assetPath = 'assets/prices/${market}_${ticker}_$year.json.gz';
+    final String assetPath = 'assets/prices/KR/KR_${ticker}_$year.json.gz';
     final List<String> assets = await _assetIndex.listPriceAssets();
     if (!assets.contains(assetPath)) {
       throw StateError(

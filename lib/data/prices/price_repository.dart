@@ -53,8 +53,8 @@ class PriceRepository {
     required String assetKey,
   }) async {
     _validateAssetType(assetType);
-    final Map<String, Map<String, List<int>>> index = await _assetIndex.buildFlatIndex();
-    final List<int> years = index[assetType.code]?[assetKey] ?? <int>[];
+    final Map<AssetType, Map<String, List<int>>> index = await _assetIndex.buildAssetTypeIndex();
+    final List<int> years = index[assetType]?[assetKey] ?? <int>[];
     return List<int>.from(years)..sort();
   }
 
@@ -188,15 +188,15 @@ class PriceRepository {
   }
 
   AssetType _assetTypeFromMarket(String market) {
-    if (market == 'KR') {
-      return AssetType.stockKR;
-    }
-    throw ArgumentError.value(market, 'market', 'unsupported market for this step');
+    return assetTypeFromCode(market);
   }
 
   void _validateAssetType(AssetType assetType) {
-    if (assetType != AssetType.stockKR) {
-      throw ArgumentError.value(assetType, 'assetType', 'only stockKR is enabled in this step');
+    switch (assetType) {
+      case AssetType.stockKR:
+      case AssetType.gold:
+      case AssetType.fx:
+        return;
     }
   }
 
