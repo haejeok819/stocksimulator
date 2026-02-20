@@ -43,7 +43,7 @@ class BattleSetupNotifier extends StateNotifier<BattleSetupState> {
   BattleSetupNotifier()
       : super(
           BattleSetupState(
-            market: StockMarket.us,
+            market: StockMarket.kr,
             stockA: null,
             stockB: null,
             startDate: DateTime.now().subtract(const Duration(days: 180)),

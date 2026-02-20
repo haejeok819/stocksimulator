@@ -14,7 +14,7 @@ class PopularScreen extends StatefulWidget {
 
 class _PopularScreenState extends State<PopularScreen> {
   final StockRepository _repository = StockRepository();
-  StockMarket _market = StockMarket.us;
+  StockMarket _market = StockMarket.kr;
 
   @override
   Widget build(BuildContext context) {
@@ -25,17 +25,15 @@ class _PopularScreenState extends State<PopularScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            SegmentedButton<StockMarket>(
-              segments: const <ButtonSegment<StockMarket>>[
-                ButtonSegment<StockMarket>(value: StockMarket.us, label: Text('US')),
-                ButtonSegment<StockMarket>(value: StockMarket.kr, label: Text('KR')),
-              ],
-              selected: <StockMarket>{_market},
-              onSelectionChanged: (Set<StockMarket> value) {
-                setState(() {
-                  _market = value.first;
-                });
-              },
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF5677E7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text('KR', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ),
             const SizedBox(height: 12),
             Expanded(
