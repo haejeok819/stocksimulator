@@ -80,8 +80,9 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
       return const Center(child: Text('표시할 데이터가 없습니다.'));
     }
 
-    final int safeIndex = widget.currentIndex.clamp(0, widget.points.length - 1);
-    final int renderEndIndex = widget.playbackPosition.ceil().clamp(0, widget.points.length - 1);
+    final double safePlaybackPosition = widget.playbackPosition.clamp(0, (widget.points.length - 1).toDouble());
+    final int safeIndex = safePlaybackPosition.floor();
+    final int renderEndIndex = safePlaybackPosition.ceil();
     final int visibleStart = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: renderEndIndex);
 
     double minY = _allPercents[visibleStart];
@@ -122,7 +123,7 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             visibleStartIndex: visibleStart,
             currentIndex: safeIndex,
             renderEndIndex: renderEndIndex,
-            playbackPosition: widget.playbackPosition,
+            playbackPosition: safePlaybackPosition,
             minY: _smoothedMinY!,
             maxY: _smoothedMaxY!,
             pulse: widget.pulse,

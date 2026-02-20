@@ -67,8 +67,9 @@ class _BattleChartState extends State<BattleChart> {
     }
 
     final int length = min(widget.seriesA.length, widget.seriesB.length);
-    final int safeIndex = widget.playbackIndex.clamp(0, length - 1);
-    final int renderEndIndex = widget.playbackPosition.ceil().clamp(0, length - 1);
+    final double safePlaybackPosition = widget.playbackPosition.clamp(0, (length - 1).toDouble());
+    final int safeIndex = safePlaybackPosition.floor();
+    final int renderEndIndex = safePlaybackPosition.ceil();
     final int visibleStart = battleVisibleStartIndex(totalCount: length, currentIndex: renderEndIndex);
 
     double minY = widget.seriesA[visibleStart];
@@ -106,7 +107,7 @@ class _BattleChartState extends State<BattleChart> {
         visibleStartIndex: visibleStart,
         currentIndex: safeIndex,
         renderEndIndex: renderEndIndex,
-        playbackPosition: widget.playbackPosition,
+        playbackPosition: safePlaybackPosition,
         minY: _smoothedMinY!,
         maxY: _smoothedMaxY!,
         basePriceA: widget.basePriceA,
