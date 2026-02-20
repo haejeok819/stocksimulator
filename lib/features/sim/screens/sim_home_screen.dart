@@ -30,7 +30,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     '코로나 때 샀더라면?',
   ];
 
-  StockMarket _market = StockMarket.kr;
+  _AssetFilter _assetFilter = _AssetFilter.all;
   String _query = '';
 
   bool get _safeMode {
@@ -48,14 +48,48 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
     super.dispose();
   }
 
-  void _setMarket(StockMarket value) {
-    if (_market == value) return;
+  void _setAssetFilter(_AssetFilter value) {
+    if (_assetFilter == value) return;
     if (!_safeMode) {
       HapticFeedback.selectionClick();
     }
     setState(() {
-      _market = value;
+      _assetFilter = value;
     });
+  }
+
+  List<StockModel> _applyFilterAndSearch(List<StockModel> source) {
+    final Iterable<StockModel> filteredByType = switch (_assetFilter) {
+      _AssetFilter.all => source,
+      _AssetFilter.stockKR => source.where((StockModel stock) => stock.assetType == AssetType.stockKR),
+      _AssetFilter.gold => source.where((StockModel stock) => stock.assetType == AssetType.gold),
+      _AssetFilter.fx => source.where((StockModel stock) => stock.assetType == AssetType.fx),
+    };
+
+    final String normalized = _query.trim().toLowerCase();
+    final Iterable<StockModel> filteredBySearch = normalized.isEmpty
+        ? filteredByType
+        : filteredByType.where((StockModel stock) => stock.displayName.toLowerCase().contains(normalized));
+
+    final List<StockModel> sorted = filteredBySearch.toList();
+    int priority(StockModel stock) {
+      switch (stock.assetType) {
+        case AssetType.gold:
+          return 0;
+        case AssetType.fx:
+          return 1;
+        case AssetType.stockKR:
+          return 2;
+      }
+    }
+
+    sorted.sort((StockModel a, StockModel b) {
+      final int p = priority(a).compareTo(priority(b));
+      if (p != 0) return p;
+      return a.rank.compareTo(b.rank);
+    });
+
+    return sorted;
   }
 
   @override
@@ -82,7 +116,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                _HeroSection(market: _market),
+                const _HeroSection(),
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -92,7 +126,7 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                   ),
                   child: Column(
                     children: <Widget>[
-                      _MarketToggle(market: _market, onChanged: _setMarket),
+                      _AssetFilterToggle(selected: _assetFilter, onChanged: _setAssetFilter),
                       const SizedBox(height: 10),
                       _PremiumSearchBar(
                         controller: _searchController,
@@ -117,13 +151,13 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                 const SizedBox(height: 16),
                 Expanded(
                   child: FutureBuilder<List<StockModel>>(
-                    future: _repository.getTopStocks(market: _market, query: _query),
+                    future: _repository.getTopStocks(assetType: AssetType.stockKR),
                     builder: (BuildContext context, AsyncSnapshot<List<StockModel>> snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      final List<StockModel> stocks = snapshot.data ?? <StockModel>[];
+                      final List<StockModel> stocks = _applyFilterAndSearch(snapshot.data ?? <StockModel>[]);
                       if (stocks.isEmpty) {
                         return const Center(child: Text('데이터 없음', style: TextStyle(color: Color(0xFFA1A1A8))));
                       }
@@ -166,13 +200,11 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
 }
 
 class _HeroSection extends StatelessWidget {
-  const _HeroSection({required this.market});
-
-  final StockMarket market;
+  const _HeroSection();
 
   @override
   Widget build(BuildContext context) {
-    final String marketLabel = market == StockMarket.kr ? 'KR MARKET' : 'US MARKET';
+    const String marketLabel = '자산 필터';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
@@ -200,16 +232,31 @@ class _HeroSection extends StatelessWidget {
   }
 }
 
-class _MarketToggle extends StatelessWidget {
-  const _MarketToggle({required this.market, required this.onChanged});
+enum _AssetFilter { all, stockKR, gold, fx }
 
-  final StockMarket market;
-  final ValueChanged<StockMarket> onChanged;
+extension on _AssetFilter {
+  String get label {
+    switch (this) {
+      case _AssetFilter.all:
+        return '전체';
+      case _AssetFilter.stockKR:
+        return '국내주식';
+      case _AssetFilter.gold:
+        return '금';
+      case _AssetFilter.fx:
+        return '환율';
+    }
+  }
+}
+
+class _AssetFilterToggle extends StatelessWidget {
+  const _AssetFilterToggle({required this.selected, required this.onChanged});
+
+  final _AssetFilter selected;
+  final ValueChanged<_AssetFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final bool krSelected = market == StockMarket.kr;
-
     return Container(
       height: 42,
       padding: const EdgeInsets.all(3),
@@ -217,58 +264,32 @@ class _MarketToggle extends StatelessWidget {
         color: const Color(0xFF232330),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Stack(
-        children: <Widget>[
-          IgnorePointer(
-            child: AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            alignment: krSelected ? Alignment.centerLeft : Alignment.centerRight,
-            child: Container(
-              width: (MediaQuery.of(context).size.width - 36 - 6) / 2,
-              decoration: BoxDecoration(
-                color: const Color(0xFF5677E7),
-                borderRadius: BorderRadius.circular(999),
+      child: Row(
+        children: _AssetFilter.values.map((_AssetFilter filter) {
+          final bool isSelected = selected == filter;
+          return Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onChanged(filter),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFF5677E7) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  filter.label,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-              // child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w700)),
             ),
-          ),
-          ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(StockMarket.kr),
-                  child: Center(
-                    child: Text(
-                      'KR',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: krSelected ? FontWeight.w800 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(StockMarket.us),
-                  child: Center(
-                    child: Text(
-                      'US',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: !krSelected ? FontWeight.w800 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          );
+        }).toList(growable: false),
       ),
     );
   }

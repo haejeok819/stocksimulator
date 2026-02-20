@@ -206,9 +206,6 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   String _formatPriceLabel(double percent) {
     final double price = basePrice * (1 + percent / 100);
-    if (marketCode == 'US') {
-      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
-    }
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
