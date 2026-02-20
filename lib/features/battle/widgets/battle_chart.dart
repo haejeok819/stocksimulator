@@ -256,13 +256,24 @@ class _BattleChartPainter extends CustomPainter {
 
     final int nextIndex = min(currentIndex + 1, length - 1);
     final double segmentT = (playbackPosition - currentIndex).clamp(0, 1);
+
+    final Offset aSegmentStart = pointFor(currentIndex, seriesA[currentIndex]);
+    final Offset aSegmentEnd = pointFor(nextIndex, seriesA[nextIndex]);
+    final Offset bSegmentStart = pointFor(currentIndex, seriesB[currentIndex]);
+    final Offset bSegmentEnd = pointFor(nextIndex, seriesB[nextIndex]);
+
+    final Offset endA = Offset(
+      ui.lerpDouble(aSegmentStart.dx, aSegmentEnd.dx, segmentT)!,
+      ui.lerpDouble(aSegmentStart.dy, aSegmentEnd.dy, segmentT)!,
+    );
+    final Offset endB = Offset(
+      ui.lerpDouble(bSegmentStart.dx, bSegmentEnd.dx, segmentT)!,
+      ui.lerpDouble(bSegmentStart.dy, bSegmentEnd.dy, segmentT)!,
+    );
+
     if (nextIndex > currentIndex && segmentT > 0) {
-      final Offset aStart = pointFor(currentIndex, seriesA[currentIndex]);
-      final Offset aEnd = pointFor(nextIndex, seriesA[nextIndex]);
-      final Offset bStart = pointFor(currentIndex, seriesB[currentIndex]);
-      final Offset bEnd = pointFor(nextIndex, seriesB[nextIndex]);
-      aPath.lineTo(ui.lerpDouble(aStart.dx, aEnd.dx, segmentT)!, ui.lerpDouble(aStart.dy, aEnd.dy, segmentT)!);
-      bPath.lineTo(ui.lerpDouble(bStart.dx, bEnd.dx, segmentT)!, ui.lerpDouble(bStart.dy, bEnd.dy, segmentT)!);
+      aPath.lineTo(endA.dx, endA.dy);
+      bPath.lineTo(endB.dx, endB.dy);
     }
 
     canvas.save();
@@ -271,13 +282,6 @@ class _BattleChartPainter extends CustomPainter {
     canvas.drawPath(aPath, aPaint);
     canvas.drawPath(bPath, bPaint);
 
-    final double endAValue = ui.lerpDouble(seriesA[currentIndex], seriesA[nextIndex], segmentT)!;
-    final double endBValue = ui.lerpDouble(seriesB[currentIndex], seriesB[nextIndex], segmentT)!;
-    final double endX = chartRect.left + (stepX * ((currentIndex - visibleStartIndex) + segmentT));
-    final double endAY = safeRect.bottom - ((endAValue - minY) / range) * safeRect.height;
-    final double endBY = safeRect.bottom - ((endBValue - minY) / range) * safeRect.height;
-    final Offset endA = Offset(endX.clamp(chartRect.left, chartRect.right), endAY.clamp(safeRect.top, safeRect.bottom));
-    final Offset endB = Offset(endX.clamp(chartRect.left, chartRect.right), endBY.clamp(safeRect.top, safeRect.bottom));
     canvas.drawCircle(endA, pointGlowRadius, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
     canvas.drawCircle(endB, pointGlowRadius, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
     canvas.drawCircle(endA, pointRadius, Paint()..color = const Color(0xFFE54B4B));

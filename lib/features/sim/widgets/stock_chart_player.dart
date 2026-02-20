@@ -258,28 +258,21 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
     final int nextIndex = min(currentIndex + 1, points.length - 1);
     final double segmentT = (playbackPosition - currentIndex).clamp(0, 1);
-    if (nextIndex > currentIndex && segmentT > 0) {
-      final Offset p1 = pointAt(currentIndex);
-      final Offset p2 = pointAt(nextIndex);
-      final Offset partial = Offset(
-        ui.lerpDouble(p1.dx, p2.dx, segmentT)!,
-        ui.lerpDouble(p1.dy, p2.dy, segmentT)!,
-      );
-      canvas.drawLine(p1, partial, allPercents[nextIndex] >= allPercents[currentIndex] ? upPaint : downPaint);
-    }
 
-    final double currentPercent = ui.lerpDouble(
-      allPercents[currentIndex],
-      allPercents[nextIndex],
-      segmentT,
-    )!;
-    final int localCurrent = currentIndex - visibleStartIndex;
-    final double currentX = chartRect.left + (localCurrent + segmentT) * stepX;
-    final double currentY = safeRect.bottom - ((currentPercent - minY) / range) * safeRect.height;
+    final Offset segmentStart = pointAt(currentIndex);
+    final Offset segmentEnd = pointAt(nextIndex);
     final Offset currentPoint = Offset(
-      currentX.clamp(chartRect.left, chartRect.right),
-      currentY.clamp(safeRect.top, safeRect.bottom),
+      ui.lerpDouble(segmentStart.dx, segmentEnd.dx, segmentT)!,
+      ui.lerpDouble(segmentStart.dy, segmentEnd.dy, segmentT)!,
     );
+
+    if (nextIndex > currentIndex && segmentT > 0) {
+      canvas.drawLine(
+        segmentStart,
+        currentPoint,
+        allPercents[nextIndex] >= allPercents[currentIndex] ? upPaint : downPaint,
+      );
+    }
 
     final double glowRadius = pointGlowRadius * (0.72 + 0.28 * pulse);
     canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
