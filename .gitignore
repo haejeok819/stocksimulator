@@ -17,7 +17,6 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
-assets/prices/
 
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
@@ -48,3 +47,5 @@ app.*.map.json
 # Local generated stock price assets (not version-controlled)
 assets/prices/**
 !assets/prices/.gitkeep
+!assets/prices/KR/
+!assets/prices/KR/KR_top50_meta.json
