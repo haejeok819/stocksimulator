@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
@@ -142,6 +143,31 @@ class BattleSeriesData {
       returnB: returnsB[safe],
     );
   }
+
+  BattleTick tickAtPosition(double position) {
+    if (length <= 1) {
+      return tickAt(0);
+    }
+
+    final double clamped = position.clamp(0, (length - 1).toDouble());
+    final int left = clamped.floor();
+    final int right = min(left + 1, length - 1);
+    final double t = clamped - left;
+
+    if (t <= 0 || left == right) {
+      return tickAt(left);
+    }
+
+    return BattleTick(
+      ymd: normalized.dates[left],
+      valueA: _lerp(valuesA[left], valuesA[right], t),
+      valueB: _lerp(valuesB[left], valuesB[right], t),
+      returnA: _lerp(returnsA[left], returnsA[right], t),
+      returnB: _lerp(returnsB[left], returnsB[right], t),
+    );
+  }
+
+  double _lerp(double a, double b, double t) => a + ((b - a) * t);
 }
 
 class BattleTick {
