@@ -22,12 +22,14 @@ class StockChartPlayer extends StatefulWidget {
     super.key,
     required this.points,
     required this.currentIndex,
+    required this.playbackPosition,
     required this.pulse,
     required this.marketCode,
   });
 
   final List<SimulationPoint> points;
   final int currentIndex;
+  final double playbackPosition;
   final double pulse;
   final String marketCode;
 
@@ -120,6 +122,7 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             allPercents: _allPercents,
             visibleStartIndex: visibleStart,
             currentIndex: safeIndex,
+            playbackPosition: widget.playbackPosition,
             minY: _smoothedMinY!,
             maxY: _smoothedMaxY!,
             pulse: widget.pulse,
@@ -141,6 +144,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.allPercents,
     required this.visibleStartIndex,
     required this.currentIndex,
+    required this.playbackPosition,
     required this.minY,
     required this.maxY,
     required this.pulse,
@@ -155,6 +159,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final List<double> allPercents;
   final int visibleStartIndex;
   final int currentIndex;
+  final double playbackPosition;
   final double minY;
   final double maxY;
   final double pulse;
@@ -166,7 +171,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 2 || currentIndex <= visibleStartIndex) return;
+    if (points.length < 2 || currentIndex < visibleStartIndex) return;
 
     const double yAxisWidth = 64;
     const double xAxisHeight = 24;
@@ -249,7 +254,31 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       canvas.drawLine(p1, p2, allPercents[i + 1] >= allPercents[i] ? upPaint : downPaint);
     }
 
-    final Offset currentPoint = pointAt(currentIndex);
+    final int nextIndex = min(currentIndex + 1, points.length - 1);
+    final double segmentT = (playbackPosition - currentIndex).clamp(0, 1);
+    if (nextIndex > currentIndex && segmentT > 0) {
+      final Offset p1 = pointAt(currentIndex);
+      final Offset p2 = pointAt(nextIndex);
+      final Offset partial = Offset(
+        ui.lerpDouble(p1.dx, p2.dx, segmentT)!,
+        ui.lerpDouble(p1.dy, p2.dy, segmentT)!,
+      );
+      canvas.drawLine(p1, partial, allPercents[nextIndex] >= allPercents[currentIndex] ? upPaint : downPaint);
+    }
+
+    final double currentPercent = ui.lerpDouble(
+      allPercents[currentIndex],
+      allPercents[nextIndex],
+      segmentT,
+    )!;
+    final int localCurrent = currentIndex - visibleStartIndex;
+    final double currentX = chartRect.left + (localCurrent + segmentT) * stepX;
+    final double currentY = safeRect.bottom - ((currentPercent - minY) / range) * safeRect.height;
+    final Offset currentPoint = Offset(
+      currentX.clamp(chartRect.left, chartRect.right),
+      currentY.clamp(safeRect.top, safeRect.bottom),
+    );
+
     final double glowRadius = pointGlowRadius * (0.72 + 0.28 * pulse);
     canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
     canvas.drawCircle(currentPoint, pointRadius + 2.4 * pulse, Paint()..color = Colors.white);
@@ -303,6 +332,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _FullPeriodPercentChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.currentIndex != currentIndex ||
+        oldDelegate.playbackPosition != playbackPosition ||
         oldDelegate.visibleStartIndex != visibleStartIndex ||
         oldDelegate.minY != minY ||
         oldDelegate.maxY != maxY ||

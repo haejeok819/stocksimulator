@@ -159,7 +159,9 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
         child: dataAsync.when(
           data: (BattleSeriesData data) {
             final BattlePlaybackState playback = ref.watch(battlePlaybackControllerProvider);
-            final BattleTick tick = data.tickAt(playback.index);
+            final BattlePlaybackController playbackController = ref.read(battlePlaybackControllerProvider.notifier);
+            final double renderPosition = playbackController.easedPositionForRender();
+            final BattleTick tick = data.tickAtPosition(renderPosition);
             final bool aLeading = tick.returnA >= tick.returnB;
             final String leader = aLeading ? 'A' : 'B';
 
@@ -262,6 +264,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                                   seriesB: data.returnsB,
                                   dates: data.normalized.dates,
                                   playbackIndex: playback.index,
+                                  playbackPosition: renderPosition,
                                   basePriceA: data.normalized.closeA.first,
                                   basePriceB: data.normalized.closeB.first,
                                   marketCodeA: setup.stockA?.market ?? 'KR',
@@ -310,6 +313,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     const SizedBox(height: 10),
                     SegmentedButton<double>(
                       segments: const <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
                         ButtonSegment<double>(value: 1, label: Text('1x')),
                         ButtonSegment<double>(value: 2, label: Text('2x')),
                         ButtonSegment<double>(value: 4, label: Text('4x')),

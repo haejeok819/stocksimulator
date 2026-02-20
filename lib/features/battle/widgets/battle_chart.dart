@@ -22,6 +22,7 @@ class BattleChart extends StatefulWidget {
     required this.seriesB,
     required this.dates,
     required this.playbackIndex,
+    required this.playbackPosition,
     required this.basePriceA,
     required this.basePriceB,
     required this.marketCodeA,
@@ -32,6 +33,7 @@ class BattleChart extends StatefulWidget {
   final List<double> seriesB;
   final List<int> dates;
   final int playbackIndex;
+  final double playbackPosition;
   final double basePriceA;
   final double basePriceB;
   final String marketCodeA;
@@ -102,6 +104,7 @@ class _BattleChartState extends State<BattleChart> {
         dates: widget.dates,
         visibleStartIndex: visibleStart,
         currentIndex: safeIndex,
+        playbackPosition: widget.playbackPosition,
         minY: _smoothedMinY!,
         maxY: _smoothedMaxY!,
         basePriceA: widget.basePriceA,
@@ -123,6 +126,7 @@ class _BattleChartPainter extends CustomPainter {
     required this.dates,
     required this.visibleStartIndex,
     required this.currentIndex,
+    required this.playbackPosition,
     required this.minY,
     required this.maxY,
     required this.basePriceA,
@@ -139,6 +143,7 @@ class _BattleChartPainter extends CustomPainter {
   final List<int> dates;
   final int visibleStartIndex;
   final int currentIndex;
+  final double playbackPosition;
   final double minY;
   final double maxY;
   final double basePriceA;
@@ -152,7 +157,7 @@ class _BattleChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final int length = min(seriesA.length, seriesB.length);
-    if (length < 2 || currentIndex <= visibleStartIndex) return;
+    if (length < 2 || currentIndex < visibleStartIndex) return;
 
     const double yAxisWidth = 64;
     const double xAxisHeight = 24;
@@ -243,14 +248,30 @@ class _BattleChartPainter extends CustomPainter {
       }
     }
 
+    final int nextIndex = min(currentIndex + 1, length - 1);
+    final double segmentT = (playbackPosition - currentIndex).clamp(0, 1);
+    if (nextIndex > currentIndex && segmentT > 0) {
+      final Offset aStart = pointFor(currentIndex, seriesA[currentIndex]);
+      final Offset aEnd = pointFor(nextIndex, seriesA[nextIndex]);
+      final Offset bStart = pointFor(currentIndex, seriesB[currentIndex]);
+      final Offset bEnd = pointFor(nextIndex, seriesB[nextIndex]);
+      aPath.lineTo(ui.lerpDouble(aStart.dx, aEnd.dx, segmentT)!, ui.lerpDouble(aStart.dy, aEnd.dy, segmentT)!);
+      bPath.lineTo(ui.lerpDouble(bStart.dx, bEnd.dx, segmentT)!, ui.lerpDouble(bStart.dy, bEnd.dy, segmentT)!);
+    }
+
     canvas.save();
     canvas.clipRRect(RRect.fromRectAndRadius(chartRect, const Radius.circular(10)));
 
     canvas.drawPath(aPath, aPaint);
     canvas.drawPath(bPath, bPaint);
 
-    final Offset endA = pointFor(currentIndex, seriesA[currentIndex]);
-    final Offset endB = pointFor(currentIndex, seriesB[currentIndex]);
+    final double endAValue = ui.lerpDouble(seriesA[currentIndex], seriesA[nextIndex], segmentT)!;
+    final double endBValue = ui.lerpDouble(seriesB[currentIndex], seriesB[nextIndex], segmentT)!;
+    final double endX = chartRect.left + (stepX * ((currentIndex - visibleStartIndex) + segmentT));
+    final double endAY = safeRect.bottom - ((endAValue - minY) / range) * safeRect.height;
+    final double endBY = safeRect.bottom - ((endBValue - minY) / range) * safeRect.height;
+    final Offset endA = Offset(endX.clamp(chartRect.left, chartRect.right), endAY.clamp(safeRect.top, safeRect.bottom));
+    final Offset endB = Offset(endX.clamp(chartRect.left, chartRect.right), endBY.clamp(safeRect.top, safeRect.bottom));
     canvas.drawCircle(endA, pointGlowRadius, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
     canvas.drawCircle(endB, pointGlowRadius, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
     canvas.drawCircle(endA, pointRadius, Paint()..color = const Color(0xFFE54B4B));
@@ -314,6 +335,7 @@ class _BattleChartPainter extends CustomPainter {
     return oldDelegate.seriesA != seriesA ||
         oldDelegate.seriesB != seriesB ||
         oldDelegate.currentIndex != currentIndex ||
+        oldDelegate.playbackPosition != playbackPosition ||
         oldDelegate.visibleStartIndex != visibleStartIndex ||
         oldDelegate.minY != minY ||
         oldDelegate.maxY != maxY ||
