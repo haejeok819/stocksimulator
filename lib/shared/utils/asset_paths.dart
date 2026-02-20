@@ -4,7 +4,20 @@ class AssetPaths {
   AssetPaths._();
 
   static String assetPathMetaListByAsset(AssetType assetType) =>
-      'assets/prices/${assetType.code}_top50_meta.json';
+      assetPathMetaListCandidatesByAsset(assetType).first;
+
+  static List<String> assetPathMetaListCandidatesByAsset(AssetType assetType) {
+    switch (assetType) {
+      case AssetType.stockKR:
+        return <String>[
+          'assets/prices/KR/KR_top50_meta.json',
+          'assets/prices/KR_top50_meta.json',
+        ];
+      case AssetType.gold:
+      case AssetType.fx:
+        return <String>['assets/prices/${assetType.code}_top50_meta.json'];
+    }
+  }
 
   static String assetPathYearByAsset({
     required AssetType assetType,
@@ -22,7 +35,12 @@ class AssetPaths {
   }
 
   // Legacy wrappers (to keep existing flow intact during migration).
-  static String assetPathMetaList(String market) => 'assets/prices/${market}_top50_meta.json';
+  static String assetPathMetaList(String market) {
+    if (market == 'KR') {
+      return 'assets/prices/KR/KR_top50_meta.json';
+    }
+    return 'assets/prices/${market}_top50_meta.json';
+  }
 
   static String assetPathYear(String market, String ticker, int year) {
     switch (market) {

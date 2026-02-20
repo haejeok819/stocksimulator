@@ -216,6 +216,16 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   }
 
 
+
+  String _visiblePeriodText() {
+    if (widget.points.isEmpty) {
+      return '-';
+    }
+    final int safeIndex = _index.clamp(0, widget.points.length - 1);
+    final int start = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+    return '${_formatYmd(widget.points[start].ymd)} ~ ${_formatYmd(widget.points[safeIndex].ymd)}';
+  }
+
   String _formatPriceByMarket(double price, String marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
   }
@@ -303,7 +313,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
               ),
               const SizedBox(height: 10),
-              Text('전체 기간 주가 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+              Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
               if (_showSkip)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

@@ -10,6 +10,7 @@ import 'package:stocksimulator/features/battle/state/battle_playback_controller.
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattlePlaybackScreen extends ConsumerStatefulWidget {
@@ -50,6 +51,13 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   String _formatYmd(int ymd) {
     final String s = ymd.toString().padLeft(8, '0');
     return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
+  }
+
+
+  String _visiblePeriodText(BattleSeriesData data, int playbackIndex) {
+    final int safe = playbackIndex.clamp(0, data.length - 1);
+    final int start = battleVisibleStartIndex(totalCount: data.length, currentIndex: safe);
+    return '${_formatYmd(data.normalized.dates[start])} ~ ${_formatYmd(data.normalized.dates[safe])}';
   }
 
   Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
@@ -278,6 +286,11 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                           Text('📅 ${_formatYmd(tick.ymd)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 2),
                           Text('Day ${playback.index + 1} / ${data.length}', style: const TextStyle(fontSize: 13, color: Color(0xFFA1A1A8))),
+                          const SizedBox(height: 2),
+                          Text(
+                            '보이는 기간  ${_visiblePeriodText(data, playback.index)}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                          ),
                         ],
                       ),
                     ),
@@ -323,7 +336,12 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
           );
         },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+          error: (Object e, StackTrace s) => Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(toUserMessage(e), textAlign: TextAlign.center),
+            ),
+          ),
         ),
       ),
     );
