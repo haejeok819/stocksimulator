@@ -172,7 +172,7 @@ class _HeroSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String marketLabel = market == StockMarket.kr ? 'KR MARKET' : 'US MARKET';
+    const String marketLabel = 'KR MARKET';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
@@ -208,67 +208,19 @@ class _MarketToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool krSelected = market == StockMarket.kr;
-
     return Container(
       height: 42,
-      padding: const EdgeInsets.all(3),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF232330),
+        color: const Color(0xFF5677E7),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Stack(
-        children: <Widget>[
-          IgnorePointer(
-            child: AnimatedAlign(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            alignment: krSelected ? Alignment.centerLeft : Alignment.centerRight,
-            child: Container(
-              width: (MediaQuery.of(context).size.width - 36 - 6) / 2,
-              decoration: BoxDecoration(
-                color: const Color(0xFF5677E7),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              // child: Text(initial, style: const TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ),
-          ),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(StockMarket.kr),
-                  child: Center(
-                    child: Text(
-                      'KR',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: krSelected ? FontWeight.w800 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onChanged(StockMarket.us),
-                  child: Center(
-                    child: Text(
-                      'US',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: !krSelected ? FontWeight.w800 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: const Text(
+        'KR',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
