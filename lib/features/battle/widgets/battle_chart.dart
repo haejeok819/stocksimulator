@@ -89,11 +89,30 @@ class _BattleChartState extends State<BattleChart> {
     double targetMin = minY - padded;
     double targetMax = maxY + padded;
 
-    final double minVisualRange = 10.0;
+    const double minVisualRange = 10.0;
     if ((targetMax - targetMin) < minVisualRange) {
       final double mid = (targetMax + targetMin) / 2;
       targetMin = mid - minVisualRange / 2;
       targetMax = mid + minVisualRange / 2;
+    }
+
+    const double nearBoundaryThreshold = 0.88;
+    if (_smoothedMinY != null && _smoothedMaxY != null) {
+      final double previousMin = _smoothedMinY!;
+      final double previousMax = _smoothedMaxY!;
+      final double previousRange = max(previousMax - previousMin, minVisualRange);
+
+      final double topRatio = (maxY - previousMin) / previousRange;
+      if (topRatio >= nearBoundaryThreshold) {
+        final double expandedMax = previousMin + ((maxY - previousMin) / nearBoundaryThreshold);
+        targetMax = max(targetMax, expandedMax);
+      }
+
+      final double bottomRatio = (previousMax - minY) / previousRange;
+      if (bottomRatio >= nearBoundaryThreshold) {
+        final double expandedMin = previousMax - ((previousMax - minY) / nearBoundaryThreshold);
+        targetMin = min(targetMin, expandedMin);
+      }
     }
 
     _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
