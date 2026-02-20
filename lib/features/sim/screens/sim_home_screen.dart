@@ -7,6 +7,7 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/date_range_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class SimHomeScreen extends StatefulWidget {
@@ -23,8 +24,8 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
   final ScrollController _stockListScrollController = ScrollController();
 
   static const List<String> _placeholders = <String>[
-    '삼성 vs 애플, 뭐가 더 올랐을까?',
-    '테슬라 vs 엔비디아?',
+    '삼성 vs 현대차, 뭐가 더 올랐을까?',
+    '코스피 대형주, 어디가 더 강했을까?',
     '코스피 5000의 주인공 삼성의 상승세는?',
     '10년동안 묵혀뒀다면 얼마를 벌었을까?',
     '코로나 때 샀더라면?',
@@ -157,9 +158,21 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                         return const Center(child: CircularProgressIndicator());
                       }
 
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            toUserMessage(snapshot.error!),
+                            style: const TextStyle(color: Color(0xFFA1A1A8)),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+
                       final List<StockModel> stocks = _applyFilterAndSearch(snapshot.data ?? <StockModel>[]);
                       if (stocks.isEmpty) {
-                        return const Center(child: Text('데이터 없음', style: TextStyle(color: Color(0xFFA1A1A8))));
+                        return const Center(
+                          child: Text('표시할 자산이 없습니다.', style: TextStyle(color: Color(0xFFA1A1A8))),
+                        );
                       }
 
                       return ListView.separated(
@@ -261,8 +274,9 @@ class _AssetFilterToggle extends StatelessWidget {
       height: 42,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF5677E7),
+        color: const Color(0xFF262836),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x334A4F6A)),
       ),
       child: Row(
         children: _AssetFilter.values.map((_AssetFilter filter) {
@@ -275,14 +289,14 @@ class _AssetFilterToggle extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF5677E7) : Colors.transparent,
+                  color: isSelected ? const Color(0xFF5677E7) : const Color(0xFF1E202C),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   filter.label,
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    color: isSelected ? Colors.white : const Color(0xFFA7ADBE),
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),
