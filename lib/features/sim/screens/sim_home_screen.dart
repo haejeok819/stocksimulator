@@ -259,9 +259,9 @@ class _AssetFilterToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 42,
-      padding: const EdgeInsets.all(3),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF232330),
+        color: const Color(0xFF5677E7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
