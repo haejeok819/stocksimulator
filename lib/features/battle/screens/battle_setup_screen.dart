@@ -84,7 +84,7 @@ class _BattleTickerCompareSection extends StatelessWidget {
           tint: const Color(0x22E54B4B),
           borderColor: const Color(0x66E54B4B),
           labelColor: const Color(0xFFE54B4B),
-          market: setup.stockA?.market == 'KR' ? StockMarket.kr : StockMarket.us,
+          market: StockMarket.kr,
         ),
         const SizedBox(height: 12),
         const _VsBadge(),
@@ -95,7 +95,7 @@ class _BattleTickerCompareSection extends StatelessWidget {
           tint: const Color(0x22266DD3),
           borderColor: const Color(0x66266DD3),
           labelColor: const Color(0xFF266DD3),
-          market: setup.stockB?.market == 'KR' ? StockMarket.kr : StockMarket.us,
+          market: StockMarket.kr,
         ),
       ],
     );
@@ -199,7 +199,6 @@ class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                       child: SegmentedButton<StockMarket>(
                         segments: const <ButtonSegment<StockMarket>>[
-                          ButtonSegment<StockMarket>(value: StockMarket.us, label: Text('US')),
                           ButtonSegment<StockMarket>(value: StockMarket.kr, label: Text('KR')),
                         ],
                         selected: <StockMarket>{selectedMarket},
@@ -569,9 +568,7 @@ class BattleStartButtons extends ConsumerWidget {
 
   Future<void> _randomMatching(WidgetRef ref) async {
     final StockRepository repository = ref.read(battleStockRepositoryProvider);
-    final List<StockModel> usStocks = await repository.getTopStocks(market: StockMarket.us);
-    final List<StockModel> krStocks = await repository.getTopStocks(market: StockMarket.kr);
-    final List<StockModel> stocks = <StockModel>[...usStocks, ...krStocks];
+    final List<StockModel> stocks = await repository.getTopStocks(market: StockMarket.kr);
 
     if (stocks.length < 2) {
       return;

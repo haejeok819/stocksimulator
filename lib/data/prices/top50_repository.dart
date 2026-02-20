@@ -38,7 +38,7 @@ class Top50Repository {
   }) async {
     _validateMarket(market);
 
-    final String assetPath = 'assets/prices/${market}_${ticker}_$year.json.gz';
+    final String assetPath = 'assets/prices/KR/KR_${ticker}_$year.json.gz';
     final List<String> assets = await _assetIndex.listPriceAssets();
     if (!assets.contains(assetPath)) {
       throw StateError(
@@ -54,8 +54,8 @@ class Top50Repository {
   }
 
   void _validateMarket(String market) {
-    if (market != 'KR' && market != 'US') {
-      throw ArgumentError.value(market, 'market', 'market must be KR or US');
+    if (market != 'KR') {
+      throw ArgumentError.value(market, 'market', 'market must be KR');
     }
   }
 }
