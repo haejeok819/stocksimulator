@@ -256,7 +256,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     return '${_formatYmd(widget.points[start].ymd)} ~ ${_formatYmd(widget.points[safeIndex].ymd)}';
   }
 
-  String _formatPriceByMarket(double price, String marketCode) {
+  String _formatPriceByMarket(double price, String _marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
@@ -313,7 +313,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
                               currentIndex: _index,
                               playbackPosition: _renderPosition,
                               pulse: motionOn ? (sin(_pulseTime) + 1) / 2 : 0,
-                              marketCode: marketCode,
                             );
                           },
                         ),

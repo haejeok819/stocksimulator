@@ -24,14 +24,12 @@ class StockChartPlayer extends StatefulWidget {
     required this.currentIndex,
     required this.playbackPosition,
     required this.pulse,
-    required this.marketCode,
   });
 
   final List<SimulationPoint> points;
   final int currentIndex;
   final double playbackPosition;
   final double pulse;
-  final String marketCode;
 
   @override
   State<StockChartPlayer> createState() => _StockChartPlayerState();
@@ -129,7 +127,6 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             maxY: _smoothedMaxY!,
             pulse: widget.pulse,
             basePrice: _basePrice,
-            marketCode: widget.marketCode,
             lineStrokeWidth: _kLineStroke,
             pointRadius: _kPointRadius,
             pointGlowRadius: _kPointGlow,
@@ -152,7 +149,6 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.maxY,
     required this.pulse,
     required this.basePrice,
-    required this.marketCode,
     required this.lineStrokeWidth,
     required this.pointRadius,
     required this.pointGlowRadius,
@@ -168,10 +164,11 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final double maxY;
   final double pulse;
   final double basePrice;
-  final String marketCode;
   final double lineStrokeWidth;
   final double pointRadius;
   final double pointGlowRadius;
+
+  static const double _kTopExtraPadding = 6.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -181,9 +178,10 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     const double xAxisHeight = 24;
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
     final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
+    final double topSafety = verticalSafety + _kTopExtraPadding;
     final Rect safeRect = Rect.fromLTRB(
       chartRect.left,
-      chartRect.top + verticalSafety,
+      chartRect.top + topSafety,
       chartRect.right,
       chartRect.bottom - verticalSafety,
     );
@@ -343,7 +341,6 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
         oldDelegate.maxY != maxY ||
         oldDelegate.pulse != pulse ||
         oldDelegate.basePrice != basePrice ||
-        oldDelegate.marketCode != marketCode ||
         oldDelegate.lineStrokeWidth != lineStrokeWidth ||
         oldDelegate.pointRadius != pointRadius ||
         oldDelegate.pointGlowRadius != pointGlowRadius;

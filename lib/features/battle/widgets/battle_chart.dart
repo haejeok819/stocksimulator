@@ -157,6 +157,7 @@ class _BattleChartPainter extends CustomPainter {
   final double lineStrokeWidth;
   final double pointRadius;
   final double pointGlowRadius;
+  static const double _kTopExtraPadding = 6.0;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -167,9 +168,10 @@ class _BattleChartPainter extends CustomPainter {
     const double xAxisHeight = 24;
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
     final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
+    final double topSafety = verticalSafety + _kTopExtraPadding;
     final Rect safeRect = Rect.fromLTRB(
       chartRect.left,
-      chartRect.top + verticalSafety,
+      chartRect.top + topSafety,
       chartRect.right,
       chartRect.bottom - verticalSafety,
     );
@@ -320,7 +322,7 @@ class _BattleChartPainter extends CustomPainter {
     return '${_formatPrice(priceA, marketCodeA)} / ${_formatPrice(priceB, marketCodeB)}';
   }
 
-  String _formatPrice(double price, String marketCode) {
+  String _formatPrice(double price, String _marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
