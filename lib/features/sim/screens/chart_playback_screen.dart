@@ -92,7 +92,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       return;
     }
 
-    _skipTimer = Timer(const Duration(seconds: 3), () {
+    _skipTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() => _showSkip = true);
       }
@@ -103,7 +103,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
       final int maxIndex = widget.points.length - 1;
       final int speedMultiplier = _speed.round().clamp(1, 8);
-      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 3).round().clamp(1, 240);
+      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 6).round().clamp(1, 240);
 
       int nextIndex = _index;
       final double nextPulse = _pulseTime + 0.16;
