@@ -117,7 +117,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     state = state.copyWith(index: end, status: BattlePlaybackStatus.ended, showCountdown: false, countdown: 0);
   }
 
-  int _playbackTickMs() => _safeMode ? 42 : 32;
+  int _playbackTickMs() => _safeMode ? 336 : 256;
 
   int _baseStepSize(int length) {
     if (length <= 252) {

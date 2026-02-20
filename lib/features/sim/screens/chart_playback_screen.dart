@@ -73,7 +73,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     return defaultTargetPlatform == TargetPlatform.windows;
   }
 
-  int get _playbackTickMs => _isWindowsDesktop ? 40 : 16;
+  int get _playbackTickMs => _isWindowsDesktop ? 320 : 128;
 
   int get _baseStepSize {
     final int totalDays = widget.points.length;
