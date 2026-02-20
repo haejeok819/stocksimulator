@@ -645,16 +645,34 @@ class _LeaderCardState extends State<_LeaderCard> with SingleTickerProviderState
                         ]
                       : <BoxShadow>[],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text('${widget.label} · ${widget.ticker}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
-                    const SizedBox(height: 4),
-                    Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Text('₩ ${_fmt(widget.value)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    Text(AppNumberFormat.formatPercent(widget.rate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                  ],
+                child: LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final double width = constraints.maxWidth;
+                    final double amountFontSize = (width * 0.105).clamp(16.0, 23.0);
+                    final double rateFontSize = (width * 0.080).clamp(14.0, 17.0);
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text('${widget.label} · ${widget.ticker}', style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8))),
+                        const SizedBox(height: 4),
+                        Text(widget.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 8),
+                        Text(
+                          '₩ ${_fmt(widget.value)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: amountFontSize, fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          AppNumberFormat.formatPercent(widget.rate),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: rateFontSize, fontWeight: FontWeight.w800),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
