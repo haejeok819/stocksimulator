@@ -92,7 +92,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       return;
     }
 
-    _skipTimer = Timer(const Duration(seconds: 3), () {
+    _skipTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() => _showSkip = true);
       }
@@ -103,7 +103,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
       final int maxIndex = widget.points.length - 1;
       final int speedMultiplier = _speed.round().clamp(1, 8);
-      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 3).round().clamp(1, 240);
+      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 24).round().clamp(1, 240);
 
       int nextIndex = _index;
       final double nextPulse = _pulseTime + 0.16;
@@ -216,6 +216,16 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   }
 
 
+
+  String _visiblePeriodText() {
+    if (widget.points.isEmpty) {
+      return '-';
+    }
+    final int safeIndex = _index.clamp(0, widget.points.length - 1);
+    final int start = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+    return '${_formatYmd(widget.points[start].ymd)} ~ ${_formatYmd(widget.points[safeIndex].ymd)}';
+  }
+
   String _formatPriceByMarket(double price, String marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
   }
@@ -303,7 +313,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
               ),
               const SizedBox(height: 10),
-              Text('전체 기간 주가 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+              Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
               if (_showSkip)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -334,12 +344,13 @@ class _SimGridPattern extends StatelessWidget {
 class _SimGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 36) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    final Paint vPaint = Paint()..color = Colors.white.withOpacity(0.012)..strokeWidth = 1;
+    final Paint hPaint = Paint()..color = Colors.white.withOpacity(0.022)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vPaint);
     }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    for (double y = 0; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
     }
   }
 

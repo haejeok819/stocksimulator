@@ -7,6 +7,7 @@ import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/battle/screens/battle_playback_screen.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleSetupScreen extends ConsumerStatefulWidget {
@@ -178,6 +179,28 @@ class BattleTickerCard extends ConsumerStatefulWidget {
 class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
   bool _pressed = false;
 
+
+  List<StockModel> _prioritizeBattleStocks(List<StockModel> stocks) {
+    final List<StockModel> sorted = List<StockModel>.from(stocks);
+    int priority(StockModel stock) {
+      switch (stock.assetType) {
+        case AssetType.gold:
+          return 0;
+        case AssetType.fx:
+          return 1;
+        case AssetType.stockKR:
+          return 2;
+      }
+    }
+
+    sorted.sort((StockModel a, StockModel b) {
+      final int p = priority(a).compareTo(priority(b));
+      if (p != 0) return p;
+      return a.rank.compareTo(b.rank);
+    });
+    return sorted;
+  }
+
   Future<void> _pickStock() async {
     final TextEditingController controller = TextEditingController();
     String query = '';
@@ -217,7 +240,24 @@ class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
                       child: FutureBuilder<List<StockModel>>(
                         future: ref.read(battleStockRepositoryProvider).getTopStocks(market: selectedMarket, query: query),
                         builder: (BuildContext context, AsyncSnapshot<List<StockModel>> snapshot) {
-                          final List<StockModel> stocks = snapshot.data ?? <StockModel>[];
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: Text(toUserMessage(snapshot.error!), textAlign: TextAlign.center),
+                              ),
+                            );
+                          }
+
+                          final List<StockModel> stocks = _prioritizeBattleStocks(snapshot.data ?? <StockModel>[]);
+                          if (stocks.isEmpty) {
+                            return const Center(child: Text('조건에 맞는 종목이 없습니다.'));
+                          }
+
                           return ListView.builder(
                             itemCount: stocks.length,
                             itemBuilder: (BuildContext context, int index) {
@@ -258,49 +298,74 @@ class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
     final String name = widget.stock?.displayName ?? '종목을 선택해주세요';
     final String logoText = widget.stock == null ? widget.label : ticker.substring(0, 1);
 
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: _pickStock,
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 130),
-        scale: _pressed ? 1.03 : 1,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 150),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: widget.tint,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: widget.borderColor),
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
-                alignment: Alignment.center,
-                child: Text(logoText, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width = constraints.maxWidth;
+        final double nameFont = (width * 0.058).clamp(16, 20).toDouble();
+        final double tickerFont = (width * 0.042).clamp(13, 17).toDouble();
+        final double labelFont = (width * 0.032).clamp(12, 14).toDouble();
+        final double cardPad = (width * 0.035).clamp(12, 16).toDouble();
+        final double logoSize = (width * 0.16).clamp(50, 58).toDouble();
+
+        return GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTap: _pickStock,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 130),
+            scale: _pressed ? 1.03 : 1,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 128),
+              padding: EdgeInsets.all(cardPad),
+              decoration: BoxDecoration(
+                color: widget.tint,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: widget.borderColor),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text('종목 ${widget.label}', style: TextStyle(fontSize: 14, color: widget.labelColor, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Text(ticker, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  ],
-                ),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: logoSize,
+                    height: logoSize,
+                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+                    alignment: Alignment.center,
+                    child: Text(logoText, style: TextStyle(fontSize: (logoSize * 0.42).clamp(20, 24), fontWeight: FontWeight.w700)),
+                  ),
+                  SizedBox(width: (width * 0.03).clamp(10, 12).toDouble()),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Text(
+                          '종목 ${widget.label}',
+                          style: TextStyle(fontSize: labelFont, color: widget.labelColor, fontWeight: FontWeight.w700),
+                        ),
+                        SizedBox(height: (width * 0.016).clamp(6, 8).toDouble()),
+                        Text(
+                          name,
+                          style: TextStyle(fontSize: nameFont, fontWeight: FontWeight.w800),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: (width * 0.016).clamp(6, 8).toDouble()),
+                        Text(
+                          ticker,
+                          style: TextStyle(fontSize: tickerFont, fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right),
+                ],
               ),
-              const Icon(Icons.chevron_right),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
