@@ -25,6 +25,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   String _previousLeader = 'A';
   bool _flash = false;
   bool _isProcessingResultAd = false;
+  bool _isSpeedFlowInProgress = false;
 
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
@@ -120,8 +121,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
       _isProcessingResultAd = true;
     });
 
-    final BattlePlaybackStatus previousStatus = ref.read(battlePlaybackControllerProvider).status;
-    ref.read(battlePlaybackControllerProvider.notifier).pause();
+    final BattlePlaybackStatus previousStatus = _pauseBattlePlaybackForInteraction();
     final bool watched = await _showInterstitialAdGate();
 
     if (!mounted) return;
@@ -130,9 +130,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
       setState(() {
         _isProcessingResultAd = false;
       });
-      if (previousStatus == BattlePlaybackStatus.running) {
-        ref.read(battlePlaybackControllerProvider.notifier).resume();
-      }
+      _resumeBattlePlaybackIfNeeded(previousStatus);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('광고 시청이 완료되지 않아 결과를 볼 수 없어요.')),
       );
@@ -155,16 +153,38 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     await _showResultDialog(tick: tick, setup: setup);
   }
 
+
+  BattlePlaybackStatus _pauseBattlePlaybackForInteraction() {
+    final BattlePlaybackStatus previousStatus = ref.read(battlePlaybackControllerProvider).status;
+    ref.read(battlePlaybackControllerProvider.notifier).pause();
+    return previousStatus;
+  }
+
+  void _resumeBattlePlaybackIfNeeded(BattlePlaybackStatus previousStatus) {
+    if (!mounted) return;
+    if (previousStatus == BattlePlaybackStatus.running) {
+      ref.read(battlePlaybackControllerProvider.notifier).resume();
+    }
+  }
+
   Future<void> _onSpeedSelected(double selectedSpeed) async {
+    if (_isSpeedFlowInProgress || !mounted) return;
+
+    final BattlePlaybackStatus previousStatus = _pauseBattlePlaybackForInteraction();
+
     if (selectedSpeed != 8) {
       ref.read(battlePlaybackControllerProvider.notifier).setSpeed(selectedSpeed);
+      _resumeBattlePlaybackIfNeeded(previousStatus);
       return;
     }
 
     if (AppSettings.is8xSpeedUnlocked) {
       ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
+      _resumeBattlePlaybackIfNeeded(previousStatus);
       return;
     }
+
+    _isSpeedFlowInProgress = true;
 
     final bool? shouldWatchAd = await showDialog<bool>(
       context: context,
@@ -180,20 +200,20 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
       },
     );
 
-    if (shouldWatchAd != true || !mounted) return;
-
-    final bool unlocked = await _showInterstitialAdGate();
-    if (!mounted) return;
-
-    if (!unlocked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
-      );
-      return;
+    if (shouldWatchAd == true && mounted) {
+      final bool unlocked = await _showInterstitialAdGate();
+      if (mounted && unlocked) {
+        AppSettings.unlock8xSpeedFor(_unlockDuration);
+        ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+        );
+      }
     }
 
-    AppSettings.unlock8xSpeedFor(_unlockDuration);
-    ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
+    _isSpeedFlowInProgress = false;
+    _resumeBattlePlaybackIfNeeded(previousStatus);
   }
 
   String _koreanName(StockModel? stock) {

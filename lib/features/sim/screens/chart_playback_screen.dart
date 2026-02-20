@@ -49,6 +49,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
+  bool _isSpeedFlowInProgress = false;
 
   @override
   void initState() {
@@ -80,6 +81,146 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     }
     _frameTicker.dispose();
     super.dispose();
+  }
+
+
+  void _on8xUnlockChanged() {
+    _schedule8xUnlockExpiryCheck();
+    if (!mounted) return;
+    setState(() {
+      if (!AppSettings.is8xSpeedUnlocked && _speed == 8) {
+        _speed = 4;
+      }
+    });
+  }
+
+  void _schedule8xUnlockExpiryCheck() {
+    _speedUnlockTimer?.cancel();
+    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
+    if (unlockUntil == null) {
+      return;
+    }
+
+    final Duration remaining = unlockUntil.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      if (AppSettings.speed8xUnlockedUntil.value != null) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+      return;
+    }
+
+    _speedUnlockTimer = Timer(remaining, () {
+      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+    });
+  }
+
+  Future<bool> _showRewardedAdFor8xUnlock() async {
+    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
+    if (!mounted || ad == null) {
+      return false;
+    }
+
+    final Completer<bool> completer = Completer<bool>();
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (InterstitialAd ad) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(true);
+      },
+      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(false);
+      },
+    );
+
+    try {
+      ad.show();
+    } catch (_) {
+      ad.dispose();
+      if (!completer.isCompleted) completer.complete(false);
+    }
+
+    final bool watched = await completer.future;
+    AdService.instance.preloadInterstitial();
+    return watched;
+  }
+
+
+  bool _pausePlaybackForInteraction() {
+    final bool wasPlaying = _playing;
+    _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+    return wasPlaying;
+  }
+
+  void _resumePlaybackIfNeeded(bool shouldResume) {
+    if (!mounted || !shouldResume) return;
+    setState(() {
+      _playing = true;
+      _lastFrameElapsed = null;
+      if (!_frameTicker.isActive) {
+        _frameTicker.start();
+      }
+    });
+  }
+
+  Future<void> _onSpeedSelected(double selectedSpeed) async {
+    if (_isSpeedFlowInProgress || !mounted) return;
+
+    final bool shouldResumeAfterFlow = _pausePlaybackForInteraction();
+
+    if (selectedSpeed != 8) {
+      setState(() {
+        _speed = selectedSpeed;
+      });
+      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
+      return;
+    }
+
+    if (AppSettings.is8xSpeedUnlocked) {
+      setState(() {
+        _speed = 8;
+      });
+      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
+      return;
+    }
+
+    _isSpeedFlowInProgress = true;
+
+    final bool? shouldWatchAd = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('8x 스피드 잠금'),
+          content: const Text('광고를 보고나서 8x 스피드를 할 수 있어요.\n5분 동안은 광고가 뜨지 않아요.'),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
+          ],
+        );
+      },
+    );
+
+    if (shouldWatchAd == true && mounted) {
+      final bool unlocked = await _showRewardedAdFor8xUnlock();
+      if (mounted && unlocked) {
+        AppSettings.unlock8xSpeedFor(_unlockDuration);
+        setState(() {
+          _speed = 8;
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+        );
+      }
+    }
+
+    _isSpeedFlowInProgress = false;
+    _resumePlaybackIfNeeded(shouldResumeAfterFlow);
   }
 
 
@@ -274,6 +415,10 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   Future<void> _onSkipPressed() async {
     _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
 
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (ad == null) {
