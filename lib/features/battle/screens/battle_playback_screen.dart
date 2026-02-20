@@ -53,6 +53,13 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
   }
 
+
+  String _visiblePeriodText(BattleSeriesData data, int playbackIndex) {
+    final int safe = playbackIndex.clamp(0, data.length - 1);
+    final int start = battleVisibleStartIndex(totalCount: data.length, currentIndex: safe);
+    return '${_formatYmd(data.normalized.dates[start])} ~ ${_formatYmd(data.normalized.dates[safe])}';
+  }
+
   Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
     if (_resultDialogShown || !mounted) return;
     _resultDialogShown = true;
@@ -279,6 +286,11 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                           Text('📅 ${_formatYmd(tick.ymd)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 2),
                           Text('Day ${playback.index + 1} / ${data.length}', style: const TextStyle(fontSize: 13, color: Color(0xFFA1A1A8))),
+                          const SizedBox(height: 2),
+                          Text(
+                            '보이는 기간  ${_visiblePeriodText(data, playback.index)}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                          ),
                         ],
                       ),
                     ),

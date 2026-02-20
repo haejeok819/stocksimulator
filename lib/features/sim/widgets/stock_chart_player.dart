@@ -1,9 +1,21 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
+
+int simVisibleStartIndex({required int totalCount, required int currentIndex}) {
+  if (totalCount <= 2) return 0;
+  final int safe = currentIndex.clamp(0, totalCount - 1);
+  final double t = safe / (totalCount - 1);
+  final double eased = sqrt(t);
+  final int minWindow = max(12, (totalCount * 0.08).round()).clamp(2, totalCount);
+  final int window = (minWindow + ((totalCount - minWindow) * eased)).round().clamp(minWindow, totalCount);
+  if (safe >= totalCount - 1) return 0;
+  return max(0, safe - window + 1);
+}
 
 class StockChartPlayer extends StatefulWidget {
   const StockChartPlayer({
@@ -25,9 +37,9 @@ class StockChartPlayer extends StatefulWidget {
 
 class _StockChartPlayerState extends State<StockChartPlayer> {
   late List<double> _allPercents;
-  late double _minY;
-  late double _maxY;
   late double _basePrice;
+  double? _smoothedMinY;
+  double? _smoothedMaxY;
 
   @override
   void initState() {
@@ -40,14 +52,14 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.points, widget.points) || oldWidget.points.length != widget.points.length) {
       _recomputeDerivedData();
+      _smoothedMinY = null;
+      _smoothedMaxY = null;
     }
   }
 
   void _recomputeDerivedData() {
     if (widget.points.isEmpty) {
       _allPercents = const <double>[];
-      _minY = -1;
-      _maxY = 1;
       _basePrice = 1;
       return;
     }
@@ -56,13 +68,6 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     _allPercents = widget.points
         .map((SimulationPoint point) => ((point.close / _basePrice) - 1) * 100)
         .toList(growable: false);
-
-    double minY = _allPercents.reduce(min);
-    double maxY = _allPercents.reduce(max);
-    final double rawRange = maxY - minY;
-    final double pad = rawRange < 0.1 ? 1.0 : max(rawRange * 0.08, 0.5);
-    _minY = minY - pad;
-    _maxY = maxY + pad;
   }
 
   @override
@@ -72,6 +77,22 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     }
 
     final int safeIndex = widget.currentIndex.clamp(0, widget.points.length - 1);
+    final int visibleStart = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+
+    double minY = _allPercents[visibleStart];
+    double maxY = _allPercents[visibleStart];
+    for (int i = visibleStart; i <= safeIndex; i++) {
+      final double v = _allPercents[i];
+      if (v < minY) minY = v;
+      if (v > maxY) maxY = v;
+    }
+    final double rawRange = maxY - minY;
+    final double pad = rawRange < 0.15 ? 1.2 : max(rawRange * 0.12, 0.6);
+    final double targetMin = minY - pad;
+    final double targetMax = maxY + pad;
+
+    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.18)!;
+    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.18)!;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -80,9 +101,10 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
           painter: _FullPeriodPercentChartPainter(
             points: widget.points,
             allPercents: _allPercents,
+            visibleStartIndex: visibleStart,
             currentIndex: safeIndex,
-            minY: _minY,
-            maxY: _maxY,
+            minY: _smoothedMinY!,
+            maxY: _smoothedMaxY!,
             pulse: widget.pulse,
             basePrice: _basePrice,
             marketCode: widget.marketCode,
@@ -97,6 +119,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   _FullPeriodPercentChartPainter({
     required this.points,
     required this.allPercents,
+    required this.visibleStartIndex,
     required this.currentIndex,
     required this.minY,
     required this.maxY,
@@ -107,6 +130,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   final List<SimulationPoint> points;
   final List<double> allPercents;
+  final int visibleStartIndex;
   final int currentIndex;
   final double minY;
   final double maxY;
@@ -116,9 +140,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 2) {
-      return;
-    }
+    if (points.length < 2 || currentIndex <= visibleStartIndex) return;
 
     const double yAxisWidth = 64;
     const double xAxisHeight = 24;
@@ -143,8 +165,17 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(chartRect.right + 8, y - tp.height / 2));
     }
 
+    final int visibleCount = currentIndex - visibleStartIndex + 1;
     final double range = max(maxY - minY, 0.0001);
-    final double stepX = chartRect.width / (points.length - 1);
+    final double stepX = chartRect.width / max(1, visibleCount - 1);
+
+    Offset pointAt(int absoluteIndex) {
+      final int local = absoluteIndex - visibleStartIndex;
+      return Offset(
+        chartRect.left + local * stepX,
+        chartRect.bottom - ((allPercents[absoluteIndex] - minY) / range) * chartRect.height,
+      );
+    }
 
     final Paint upPaint = Paint()
       ..color = AppColors.upSegment
@@ -156,52 +187,44 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       ..strokeWidth = 2.8
       ..style = PaintingStyle.stroke;
 
-    for (int i = 0; i < currentIndex; i++) {
-      final Offset p1 = Offset(
-        chartRect.left + i * stepX,
-        chartRect.bottom - ((allPercents[i] - minY) / range) * chartRect.height,
-      );
-      final Offset p2 = Offset(
-        chartRect.left + (i + 1) * stepX,
-        chartRect.bottom - ((allPercents[i + 1] - minY) / range) * chartRect.height,
-      );
+    for (int i = visibleStartIndex; i < currentIndex; i++) {
+      final Offset p1 = pointAt(i);
+      final Offset p2 = pointAt(i + 1);
       canvas.drawLine(p1, p2, allPercents[i + 1] >= allPercents[i] ? upPaint : downPaint);
     }
 
-    final Offset currentPoint = Offset(
-      chartRect.left + currentIndex * stepX,
-      chartRect.bottom - ((allPercents[currentIndex] - minY) / range) * chartRect.height,
-    );
-
+    final Offset currentPoint = pointAt(currentIndex);
     final double glowRadius = 6 + 6 * pulse;
     canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.22));
     canvas.drawCircle(currentPoint, 4 + 2 * pulse, Paint()..color = Colors.white);
 
-    _drawXLabels(canvas, chartRect, stepX);
+    _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
   }
 
-  void _drawXLabels(Canvas canvas, Rect chartRect, double stepX) {
-    final int labelCount = 7;
-    final Set<int> indices = <int>{0, points.length - 1};
+  void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
+    final int visibleCount = endIndex - startIndex + 1;
+    final int labelCount = min(7, max(2, visibleCount));
+    final Set<int> indices = <int>{startIndex, endIndex};
     for (int i = 1; i < labelCount - 1; i++) {
-      final int index = ((points.length - 1) * (i / (labelCount - 1))).round();
-      indices.add(index.clamp(0, points.length - 1));
+      final int index = startIndex + ((visibleCount - 1) * (i / (labelCount - 1))).round();
+      indices.add(index.clamp(startIndex, endIndex));
     }
 
     for (final int index in indices.toList()..sort()) {
-      final double x = chartRect.left + index * stepX;
+      final double x = chartRect.left + (index - startIndex) * stepX;
       final String label = _formatCompactYmd(points[index].ymd);
       final TextPainter tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: const TextStyle(color: AppColors.helperText, fontSize: 10),
-        ),
+        text: TextSpan(text: label, style: const TextStyle(color: AppColors.helperText, fontSize: 10)),
         textDirection: TextDirection.ltr,
       )..layout();
-
       final double drawX = (x - tp.width / 2).clamp(chartRect.left, chartRect.right - tp.width);
       tp.paint(canvas, Offset(drawX, chartRect.bottom + 6));
     }
+  }
+
+  String _formatCompactYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
   String _formatPriceLabel(double percent) {
@@ -209,18 +232,14 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
-  String _formatCompactYmd(int ymd) {
-    final String raw = ymd.toString().padLeft(8, '0');
-    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
-  }
-
   @override
   bool shouldRepaint(covariant _FullPeriodPercentChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.currentIndex != currentIndex ||
-        oldDelegate.pulse != pulse ||
+        oldDelegate.visibleStartIndex != visibleStartIndex ||
         oldDelegate.minY != minY ||
         oldDelegate.maxY != maxY ||
+        oldDelegate.pulse != pulse ||
         oldDelegate.basePrice != basePrice ||
         oldDelegate.marketCode != marketCode;
   }
