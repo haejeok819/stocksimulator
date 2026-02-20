@@ -280,11 +280,13 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
         onKeyEvent: (_, __) => KeyEventResult.handled,
         child: DecoratedBox(
           decoration: const BoxDecoration(gradient: PlaybackDesignTokens.screenBackground),
-          child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
             children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
               Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 4),
               Text(_formatPriceByMarket(current.close, marketCode), style: PlaybackDesignTokens.headlineNumber),
@@ -353,17 +355,50 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               ),
               const SizedBox(height: 10),
               Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
               if (_showSkip)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: OutlinedButton(
-                    onPressed: _onSkipPressed,
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-                    child: const Text('스킵'),
+                Positioned(
+                  top: 14,
+                  right: 16,
+                  child: SafeArea(
+                    child: Builder(
+                      builder: (BuildContext context) {
+                        final double buttonWidth = (MediaQuery.sizeOf(context).width * 0.24).clamp(136.0, 210.0).toDouble();
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x735F8CFF),
+                                blurRadius: 10,
+                                spreadRadius: 0.6,
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: buttonWidth,
+                            height: 40,
+                            child: OutlinedButton(
+                              onPressed: _onSkipPressed,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2F3E5F),
+                                foregroundColor: const Color(0xFFEAF0FF),
+                                side: const BorderSide(color: Color(0xC26E8BFF), width: 1),
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                              ),
+                              child: const Text('스킵', textAlign: TextAlign.center),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
             ],
-            ),
           ),
         ),
       ),
