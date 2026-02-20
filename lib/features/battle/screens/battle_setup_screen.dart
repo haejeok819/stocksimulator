@@ -624,6 +624,19 @@ class BattleStartButtons extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('동일 자산은 선택할 수 없습니다.')));
                   return;
                 }
+                try {
+                  await buildBattleSeriesData(
+                    setup: setup,
+                    repository: ref.read(battleStockRepositoryProvider),
+                  );
+                } catch (error) {
+                  if (!context.mounted) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+                  return;
+                }
+
                 ref.invalidate(battleDataProvider);
                 ref.read(battlePlaybackControllerProvider.notifier).reset();
                 await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const BattlePlaybackScreen()));

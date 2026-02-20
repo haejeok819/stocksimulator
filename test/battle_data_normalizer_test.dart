@@ -21,4 +21,22 @@ void main() {
     expect(normalized.closeA, <double>[100, 110]);
     expect(normalized.closeB, <double>[200, 210]);
   });
+
+  test('snapNormalizedSeriesToNearestRange snaps to nearest intersection bounds', () {
+    const NormalizedBattleSeries normalized = NormalizedBattleSeries(
+      dates: <int>[20240102, 20240105, 20240109],
+      closeA: <double>[100, 102, 110],
+      closeB: <double>[200, 198, 210],
+    );
+
+    final NormalizedBattleSeries snapped = snapNormalizedSeriesToNearestRange(
+      normalized: normalized,
+      selectedStartYmd: 20240101,
+      selectedEndYmd: 20240106,
+    );
+
+    expect(snapped.dates, <int>[20240102, 20240105]);
+    expect(snapped.closeA, <double>[100, 102]);
+    expect(snapped.closeB, <double>[200, 198]);
+  });
 }

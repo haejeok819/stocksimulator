@@ -6,6 +6,8 @@ import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/battle/state/battle_data_normalizer.dart';
 
 
+const int kMinBattleIntersectionDays = 30;
+
 double calculateReturnPct({required double startValue, required double endValue}) {
   if (startValue == 0) {
     return 0;
@@ -160,13 +162,19 @@ class BattleTick {
 
 final battleDataProvider =
 FutureProvider.autoDispose<BattleSeriesData>((ref) async {
-  final setup = ref.watch(battleSetupProvider);
+  final BattleSetupState setup = ref.watch(battleSetupProvider);
+  final StockRepository repository = ref.watch(battleStockRepositoryProvider);
+  return buildBattleSeriesData(setup: setup, repository: repository);
+});
 
+Future<BattleSeriesData> buildBattleSeriesData({
+  required BattleSetupState setup,
+  required StockRepository repository,
+}) async {
   if (setup.stockA == null || setup.stockB == null) {
     throw StateError('종목 A/B를 먼저 선택하세요.');
   }
 
-  final StockRepository repository = ref.watch(battleStockRepositoryProvider);
   final List<PricePoint> aSeries = await repository.loadRange(
     market: setup.stockA!.market,
     ticker: setup.stockA!.ticker,
@@ -185,12 +193,24 @@ FutureProvider.autoDispose<BattleSeriesData>((ref) async {
     throw StateError('공통 거래일이 없어 비교할 수 없습니다.');
   }
 
-  final double amount = setup.investAmount.toDouble();
-  final double sharesA = amount / normalized.closeA.first;
-  final double sharesB = amount / normalized.closeB.first;
+  final int selectedStartYmd = _toYmd(setup.startDate);
+  final int selectedEndYmd = _toYmd(setup.endDate);
+  final NormalizedBattleSeries snapped = snapNormalizedSeriesToNearestRange(
+    normalized: normalized,
+    selectedStartYmd: selectedStartYmd,
+    selectedEndYmd: selectedEndYmd,
+  );
 
-  final List<double> valuesA = normalized.closeA.map((double close) => sharesA * close).toList(growable: false);
-  final List<double> valuesB = normalized.closeB.map((double close) => sharesB * close).toList(growable: false);
+  if (snapped.dates.length < kMinBattleIntersectionDays) {
+    throw StateError('교차 자산 공통 거래일이 부족합니다. 최소 $kMinBattleIntersectionDays일 필요, 실제 ${snapped.dates.length}일');
+  }
+
+  final double amount = setup.investAmount.toDouble();
+  final double sharesA = amount / snapped.closeA.first;
+  final double sharesB = amount / snapped.closeB.first;
+
+  final List<double> valuesA = snapped.closeA.map((double close) => sharesA * close).toList(growable: false);
+  final List<double> valuesB = snapped.closeB.map((double close) => sharesB * close).toList(growable: false);
   final double startValueA = valuesA.first;
   final double startValueB = valuesB.first;
   final List<double> returnsA = valuesA
@@ -201,7 +221,7 @@ FutureProvider.autoDispose<BattleSeriesData>((ref) async {
       .toList(growable: false);
 
   return BattleSeriesData(
-    normalized: normalized,
+    normalized: snapped,
     amount: amount,
     sharesA: sharesA,
     sharesB: sharesB,
@@ -212,7 +232,9 @@ FutureProvider.autoDispose<BattleSeriesData>((ref) async {
     tradingDaysAInRange: aSeries.length,
     tradingDaysBInRange: bSeries.length,
   );
-});
+}
+
+int _toYmd(DateTime date) => date.year * 10000 + date.month * 100 + date.day;
 
 class BattleResultState {
   const BattleResultState({
