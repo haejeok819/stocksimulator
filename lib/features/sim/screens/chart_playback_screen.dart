@@ -73,6 +73,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     }
     _frameTicker.dispose();
     _skipTimer?.cancel();
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
     super.dispose();
   }
 
