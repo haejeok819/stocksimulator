@@ -83,11 +83,12 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     }
 
     final int safeIndex = widget.currentIndex.clamp(0, widget.points.length - 1);
-    final int visibleStart = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+    final int renderEndIndex = widget.playbackPosition.ceil().clamp(0, widget.points.length - 1);
+    final int visibleStart = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: renderEndIndex);
 
     double minY = _allPercents[visibleStart];
     double maxY = _allPercents[visibleStart];
-    for (int i = visibleStart; i <= safeIndex; i++) {
+    for (int i = visibleStart; i <= renderEndIndex; i++) {
       final double v = _allPercents[i];
       if (v < minY) minY = v;
       if (v > maxY) maxY = v;
@@ -122,6 +123,7 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             allPercents: _allPercents,
             visibleStartIndex: visibleStart,
             currentIndex: safeIndex,
+            renderEndIndex: renderEndIndex,
             playbackPosition: widget.playbackPosition,
             minY: _smoothedMinY!,
             maxY: _smoothedMaxY!,
@@ -144,6 +146,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.allPercents,
     required this.visibleStartIndex,
     required this.currentIndex,
+    required this.renderEndIndex,
     required this.playbackPosition,
     required this.minY,
     required this.maxY,
@@ -159,6 +162,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final List<double> allPercents;
   final int visibleStartIndex;
   final int currentIndex;
+  final int renderEndIndex;
   final double playbackPosition;
   final double minY;
   final double maxY;
@@ -221,7 +225,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(chartRect.right + 8, y - tp.height / 2));
     }
 
-    final int visibleCount = currentIndex - visibleStartIndex + 1;
+    final int visibleCount = renderEndIndex - visibleStartIndex + 1;
     final double range = max(maxY - minY, 0.0001);
     final double stepX = chartRect.width / max(1, visibleCount - 1);
 
@@ -332,6 +336,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _FullPeriodPercentChartPainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.currentIndex != currentIndex ||
+        oldDelegate.renderEndIndex != renderEndIndex ||
         oldDelegate.playbackPosition != playbackPosition ||
         oldDelegate.visibleStartIndex != visibleStartIndex ||
         oldDelegate.minY != minY ||

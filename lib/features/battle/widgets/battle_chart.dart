@@ -68,11 +68,12 @@ class _BattleChartState extends State<BattleChart> {
 
     final int length = min(widget.seriesA.length, widget.seriesB.length);
     final int safeIndex = widget.playbackIndex.clamp(0, length - 1);
-    final int visibleStart = battleVisibleStartIndex(totalCount: length, currentIndex: safeIndex);
+    final int renderEndIndex = widget.playbackPosition.ceil().clamp(0, length - 1);
+    final int visibleStart = battleVisibleStartIndex(totalCount: length, currentIndex: renderEndIndex);
 
     double minY = widget.seriesA[visibleStart];
     double maxY = widget.seriesA[visibleStart];
-    for (int i = visibleStart; i <= safeIndex; i++) {
+    for (int i = visibleStart; i <= renderEndIndex; i++) {
       final double a = widget.seriesA[i];
       final double b = widget.seriesB[i];
       if (a < minY) minY = a;
@@ -104,6 +105,7 @@ class _BattleChartState extends State<BattleChart> {
         dates: widget.dates,
         visibleStartIndex: visibleStart,
         currentIndex: safeIndex,
+        renderEndIndex: renderEndIndex,
         playbackPosition: widget.playbackPosition,
         minY: _smoothedMinY!,
         maxY: _smoothedMaxY!,
@@ -126,6 +128,7 @@ class _BattleChartPainter extends CustomPainter {
     required this.dates,
     required this.visibleStartIndex,
     required this.currentIndex,
+    required this.renderEndIndex,
     required this.playbackPosition,
     required this.minY,
     required this.maxY,
@@ -143,6 +146,7 @@ class _BattleChartPainter extends CustomPainter {
   final List<int> dates;
   final int visibleStartIndex;
   final int currentIndex;
+  final int renderEndIndex;
   final double playbackPosition;
   final double minY;
   final double maxY;
@@ -209,7 +213,7 @@ class _BattleChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(chartRect.right + 8, y - tp.height / 2));
     }
 
-    final int visibleCount = currentIndex - visibleStartIndex + 1;
+    final int visibleCount = renderEndIndex - visibleStartIndex + 1;
     final double range = max(maxY - minY, 0.0001);
     final double stepX = chartRect.width / max(1, visibleCount - 1);
 
@@ -335,6 +339,7 @@ class _BattleChartPainter extends CustomPainter {
     return oldDelegate.seriesA != seriesA ||
         oldDelegate.seriesB != seriesB ||
         oldDelegate.currentIndex != currentIndex ||
+        oldDelegate.renderEndIndex != renderEndIndex ||
         oldDelegate.playbackPosition != playbackPosition ||
         oldDelegate.visibleStartIndex != visibleStartIndex ||
         oldDelegate.minY != minY ||
