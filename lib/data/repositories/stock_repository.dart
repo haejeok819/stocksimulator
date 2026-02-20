@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:stocksimulator/data/assets/asset_index_generator.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
@@ -12,6 +13,7 @@ class StockRepository {
   StockRepository({PriceRepository? priceRepository}) : _priceRepository = priceRepository ?? PriceRepository();
 
   final PriceRepository _priceRepository;
+  final AssetIndexGenerator _assetIndex = const AssetIndexGenerator();
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
@@ -214,35 +216,140 @@ class StockRepository {
       return cached;
     }
 
-    final String path = AssetPaths.assetPathMetaListByAsset(assetType);
-    try {
-      final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
-      if (decodedObject is! List<Object?>) {
-        return <StockModel>[];
-      }
+    final List<String> candidates = AssetPaths.assetPathMetaListCandidatesByAsset(assetType);
+    for (final String path in candidates) {
+      try {
+        final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
+        if (decodedObject is! List<Object?>) {
+          continue;
+        }
 
-      final List<Map<String, dynamic>> typedMetaList =
-          (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
+        final List<Map<String, dynamic>> typedMetaList =
+            (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
+                .asMap()
+                .entries
+                .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
+                .toList();
+
+        final List<StockModel> loaded;
+        if (assetType == AssetType.stockKR) {
+          final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
+          final Set<String> krKeys = typedIndex[AssetType.stockKR]?.keys.toSet() ?? <String>{};
+
+          final List<StockModel> normalized = typedMetaList
               .asMap()
               .entries
-              .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
+              .map((MapEntry<int, Map<String, dynamic>> entry) {
+                final String? code6 = _normalizeKrCode6(entry.value);
+                if (code6 == null) {
+                  return null;
+                }
+                final Map<String, dynamic> normalizedJson = Map<String, dynamic>.from(entry.value);
+                normalizedJson['ticker'] = code6;
+                final String resolvedName = _resolveKrDisplayName(entry.value, code6);
+                normalizedJson['name_ko'] = resolvedName;
+                if ((normalizedJson['name_en'] as String? ?? '').trim().isEmpty) {
+                  normalizedJson['name_en'] = resolvedName;
+                }
+                return StockModel.fromJson(normalizedJson, rank: entry.key + 1, assetType: assetType);
+              })
+              .whereType<StockModel>()
               .toList();
 
-      final List<StockModel> loaded = typedMetaList
+          debugPrint(
+            '[TopMeta] metaCount=${typedMetaList.length}, normalizedFirst3Keys=${normalized.take(3).map((StockModel e) => e.ticker).toList()}',
+          );
+          debugPrint("[TopMeta] indexKRCount=${krKeys.length}, contains000270=${krKeys.contains('000270')}");
+
+          if (typedMetaList.isEmpty) {
+            continue;
+          }
+
+          loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+
+          debugPrint('[TopMeta] usingFallback=false');
+          debugPrint('[TopMeta] finalListCount=${loaded.length}');
+        } else {
+          loaded = typedMetaList
+              .asMap()
+              .entries
+              .map(
+                (MapEntry<int, Map<String, dynamic>> entry) =>
+                    StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
+              )
+              .where((StockModel stock) => stock.ticker.isNotEmpty)
+              .toList();
+        }
+
+        _stockCache[cacheKey] = loaded;
+        return loaded;
+      } catch (error) {
+        debugPrint('Top meta load failed: $path ($error)');
+      }
+    }
+
+    if (assetType == AssetType.stockKR) {
+      final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
+      final List<String> sortedKrKeys = (typedIndex[AssetType.stockKR]?.keys.toList() ?? <String>[])..sort();
+      final List<StockModel> fallback = sortedKrKeys
           .asMap()
           .entries
           .map(
-            (MapEntry<int, Map<String, dynamic>> entry) =>
-                StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
+            (MapEntry<int, String> entry) => StockModel.fromJson(
+              <String, dynamic>{
+                'code6': entry.value,
+                'ticker': entry.value,
+                'name_ko': '종목 ${entry.value}',
+                'name_en': '종목 ${entry.value}',
+              },
+              rank: entry.key + 1,
+              assetType: assetType,
+            ),
           )
-          .where((StockModel stock) => stock.ticker.isNotEmpty)
           .toList();
-
-      _stockCache[cacheKey] = loaded;
-      return loaded;
-    } catch (error) {
-      debugPrint('Top meta load failed: $path ($error)');
-      return <StockModel>[];
+      debugPrint('[TopMeta] usingFallback=true');
+      debugPrint('[TopMeta] finalListCount=${fallback.length}');
+      _stockCache[cacheKey] = fallback;
+      return fallback;
     }
+
+    throw StateError('메타 파일이 없습니다');
   }
+
+
+  String _resolveKrDisplayName(Map<String, dynamic> row, String code6) {
+    final List<String> candidates = <String>[
+      (row['name_ko'] as String? ?? '').trim(),
+      (row['name_en'] as String? ?? '').trim(),
+      (row['displayName'] as String? ?? '').trim(),
+      (row['name'] as String? ?? '').trim(),
+      (row['corp_name'] as String? ?? '').trim(),
+    ];
+
+    for (final String candidate in candidates) {
+      if (candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+    return '종목 $code6';
+  }
+
+  String? _normalizeKrCode6(Map<String, dynamic> row) {
+    final String code6 = (row['code6'] as String? ?? '').trim();
+    if (RegExp(r'^\d{6}$').hasMatch(code6)) {
+      return code6;
+    }
+
+    final String ticker = (row['ticker'] as String? ?? '').trim();
+    if (ticker.contains('.')) {
+      final String left = ticker.split('.').first.trim();
+      if (RegExp(r'^\d{6}$').hasMatch(left)) {
+        return left;
+      }
+    }
+
+    final RegExpMatch? match = RegExp(r'(\d{6})').firstMatch(ticker);
+    return match?.group(1);
+  }
+
 }
