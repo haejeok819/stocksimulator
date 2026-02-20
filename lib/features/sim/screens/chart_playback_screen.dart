@@ -363,21 +363,38 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
                   top: 14,
                   right: 16,
                   child: SafeArea(
-                    child: SizedBox(
-                      width: 148,
-                      height: 40,
-                      child: OutlinedButton(
-                        onPressed: _onSkipPressed,
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0xAA1F2B3D),
-                          foregroundColor: const Color(0xFFE2E8F2),
-                          side: const BorderSide(color: Color(0x6693A4BF), width: 1),
-                          shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.2),
-                        ),
-                        child: const Text('스킵'),
-                      ),
+                    child: Builder(
+                      builder: (BuildContext context) {
+                        final double buttonWidth = (MediaQuery.sizeOf(context).width * 0.24).clamp(136.0, 210.0).toDouble();
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x735F8CFF),
+                                blurRadius: 10,
+                                spreadRadius: 0.6,
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: buttonWidth,
+                            height: 40,
+                            child: OutlinedButton(
+                              onPressed: _onSkipPressed,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2F3E5F),
+                                foregroundColor: const Color(0xFFEAF0FF),
+                                side: const BorderSide(color: Color(0xC26E8BFF), width: 1),
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                              ),
+                              child: const Text('스킵', textAlign: TextAlign.center),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
