@@ -1,4 +1,4 @@
-enum StockMarket { kr, us }
+enum StockMarket { kr }
 
 class StockModel {
   const StockModel({

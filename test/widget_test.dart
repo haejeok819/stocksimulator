@@ -7,7 +7,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('종목 선택'), findsOneWidget);
-    expect(find.text('US'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
     expect(find.text('Top100'), findsOneWidget);
     expect(find.text('종목명/심볼 검색'), findsOneWidget);

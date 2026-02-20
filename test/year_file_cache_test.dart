@@ -7,14 +7,14 @@ void main() {
     final YearFileCache cache = YearFileCache(capacity: 0);
 
     cache.write(
-      market: 'US',
-      ticker: 'AAPL',
+      market: 'KR',
+      ticker: '005930',
       year: 2024,
       points: const <PricePoint>[PricePoint(ymd: 20240102, close: 100)],
     );
 
     expect(
-      cache.read(market: 'US', ticker: 'AAPL', year: 2024),
+      cache.read(market: 'KR', ticker: '005930', year: 2024),
       isNull,
     );
   });

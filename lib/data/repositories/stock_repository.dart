@@ -16,7 +16,7 @@ class StockRepository {
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
   Future<List<StockModel>> getTopStocks({required StockMarket market, String query = ''}) async {
-    final String marketCode = market == StockMarket.kr ? 'KR' : 'US';
+    const String marketCode = 'KR';
     final List<StockModel> all = await _loadTopMetaByMarket(marketCode);
     final String normalized = query.trim().toLowerCase();
     if (normalized.isEmpty) {
