@@ -15,6 +15,25 @@ class StockRepository {
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
+  static const StockModel _goldStock = StockModel(
+    ticker: 'KRX',
+    assetType: AssetType.gold,
+    assetKey: 'KRX',
+    nameKo: '금(KRX)',
+    nameEn: 'Gold(KRX)',
+    rank: 1,
+  );
+
+  static const StockModel _fxStock = StockModel(
+    ticker: 'USD_KRW',
+    assetType: AssetType.fx,
+    assetKey: 'USD_KRW',
+    nameKo: '달러/원 환율',
+    nameEn: 'USD/KRW',
+    rank: 1,
+  );
+
+
   Future<List<StockModel>> getTopStocks({
     AssetType assetType = AssetType.stockKR,
     StockMarket? market,
@@ -23,27 +42,13 @@ class StockRepository {
     final AssetType resolvedAssetType = market?.assetType ?? assetType;
 
     final List<StockModel> all = switch (resolvedAssetType) {
-      AssetType.stockKR => await _loadTopMetaByAssetType(AssetType.stockKR),
-      AssetType.gold => const <StockModel>[
-        StockModel(
-          ticker: 'GOLD',
-          assetType: AssetType.gold,
-          assetKey: 'KRX',
-          nameKo: '금',
-          nameEn: 'Gold',
-          rank: 1,
-        ),
-      ],
-      AssetType.fx => const <StockModel>[
-        StockModel(
-          ticker: 'USD/KRW',
-          assetType: AssetType.fx,
-          assetKey: 'USD_KRW',
-          nameKo: '원/달러 환율',
-          nameEn: 'USD/KRW',
-          rank: 1,
-        ),
-      ],
+      AssetType.stockKR => <StockModel>[
+          ...await _loadTopMetaByAssetType(AssetType.stockKR),
+          _goldStock,
+          _fxStock,
+        ],
+      AssetType.gold => <StockModel>[_goldStock],
+      AssetType.fx => <StockModel>[_fxStock],
     };
 
     final String normalized = query.trim().toLowerCase();
