@@ -10,6 +10,7 @@ import 'package:stocksimulator/features/battle/state/battle_playback_controller.
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattlePlaybackScreen extends ConsumerStatefulWidget {
@@ -50,6 +51,13 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   String _formatYmd(int ymd) {
     final String s = ymd.toString().padLeft(8, '0');
     return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
+  }
+
+
+  String _visiblePeriodText(BattleSeriesData data, int playbackIndex) {
+    final int safe = playbackIndex.clamp(0, data.length - 1);
+    final int start = battleVisibleStartIndex(totalCount: data.length, currentIndex: safe);
+    return '${_formatYmd(data.normalized.dates[start])} ~ ${_formatYmd(data.normalized.dates[safe])}';
   }
 
   Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
@@ -151,7 +159,9 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
         child: dataAsync.when(
           data: (BattleSeriesData data) {
             final BattlePlaybackState playback = ref.watch(battlePlaybackControllerProvider);
-            final BattleTick tick = data.tickAt(playback.index);
+            final BattlePlaybackController playbackController = ref.read(battlePlaybackControllerProvider.notifier);
+            final double renderPosition = playbackController.easedPositionForRender();
+            final BattleTick tick = data.tickAtPosition(renderPosition);
             final bool aLeading = tick.returnA >= tick.returnB;
             final String leader = aLeading ? 'A' : 'B';
 
@@ -254,6 +264,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                                   seriesB: data.returnsB,
                                   dates: data.normalized.dates,
                                   playbackIndex: playback.index,
+                                  playbackPosition: renderPosition,
                                   basePriceA: data.normalized.closeA.first,
                                   basePriceB: data.normalized.closeB.first,
                                   marketCodeA: setup.stockA?.market ?? 'KR',
@@ -278,6 +289,11 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                           Text('📅 ${_formatYmd(tick.ymd)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 2),
                           Text('Day ${playback.index + 1} / ${data.length}', style: const TextStyle(fontSize: 13, color: Color(0xFFA1A1A8))),
+                          const SizedBox(height: 2),
+                          Text(
+                            '보이는 기간  ${_visiblePeriodText(data, playback.index)}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                          ),
                         ],
                       ),
                     ),
@@ -297,6 +313,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     const SizedBox(height: 10),
                     SegmentedButton<double>(
                       segments: const <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
                         ButtonSegment<double>(value: 1, label: Text('1x')),
                         ButtonSegment<double>(value: 2, label: Text('2x')),
                         ButtonSegment<double>(value: 4, label: Text('4x')),
@@ -323,7 +340,12 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
           );
         },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+          error: (Object e, StackTrace s) => Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(toUserMessage(e), textAlign: TextAlign.center),
+            ),
+          ),
         ),
       ),
     );
@@ -523,12 +545,13 @@ class _GridPattern extends StatelessWidget {
 class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 36) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    final Paint vPaint = Paint()..color = Colors.white.withOpacity(0.012)..strokeWidth = 1;
+    final Paint hPaint = Paint()..color = Colors.white.withOpacity(0.022)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vPaint);
     }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    for (double y = 0; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
     }
   }
 
