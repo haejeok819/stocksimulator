@@ -41,6 +41,10 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
   double? _smoothedMinY;
   double? _smoothedMaxY;
 
+  static const double _kLineStroke = 2.7;
+  static const double _kPointRadius = 4.8;
+  static const double _kPointGlow = 15.0;
+
   @override
   void initState() {
     super.initState();
@@ -88,11 +92,24 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     }
     final double rawRange = maxY - minY;
     final double pad = rawRange < 0.15 ? 1.2 : max(rawRange * 0.12, 0.6);
-    final double targetMin = minY - pad;
-    final double targetMax = maxY + pad;
+    double targetMin = minY - pad;
+    double targetMax = maxY + pad;
+
+    const double minVisualRange = 6.0;
+    if ((targetMax - targetMin) < minVisualRange) {
+      final double mid = (targetMax + targetMin) / 2;
+      targetMin = mid - minVisualRange / 2;
+      targetMax = mid + minVisualRange / 2;
+    }
 
     _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
     _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.16)!;
+
+    if ((_smoothedMaxY! - _smoothedMinY!) < minVisualRange) {
+      final double mid = (_smoothedMaxY! + _smoothedMinY!) / 2;
+      _smoothedMinY = mid - minVisualRange / 2;
+      _smoothedMaxY = mid + minVisualRange / 2;
+    }
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -108,6 +125,9 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             pulse: widget.pulse,
             basePrice: _basePrice,
             marketCode: widget.marketCode,
+            lineStrokeWidth: _kLineStroke,
+            pointRadius: _kPointRadius,
+            pointGlowRadius: _kPointGlow,
           ),
         );
       },
@@ -126,6 +146,9 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.pulse,
     required this.basePrice,
     required this.marketCode,
+    required this.lineStrokeWidth,
+    required this.pointRadius,
+    required this.pointGlowRadius,
   });
 
   final List<SimulationPoint> points;
@@ -137,6 +160,9 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final double pulse;
   final double basePrice;
   final String marketCode;
+  final double lineStrokeWidth;
+  final double pointRadius;
+  final double pointGlowRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -145,6 +171,13 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     const double yAxisWidth = 64;
     const double xAxisHeight = 24;
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
+    final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
+    final Rect safeRect = Rect.fromLTRB(
+      chartRect.left,
+      chartRect.top + verticalSafety,
+      chartRect.right,
+      chartRect.bottom - verticalSafety,
+    );
 
     final Paint axisPaint = Paint()..color = AppColors.helperText.withOpacity(0.18);
     const int yTickCount = 4;
@@ -164,7 +197,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
     for (int i = 0; i < yTickCount; i++) {
       final double ratio = i / (yTickCount - 1);
-      final double y = chartRect.top + ratio * chartRect.height;
+      final double y = safeRect.top + ratio * safeRect.height;
       final double value = tickValues[i];
       canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), axisPaint);
 
@@ -189,21 +222,26 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
     Offset pointAt(int absoluteIndex) {
       final int local = absoluteIndex - visibleStartIndex;
+      final double rawX = chartRect.left + local * stepX;
+      final double rawY = safeRect.bottom - ((allPercents[absoluteIndex] - minY) / range) * safeRect.height;
       return Offset(
-        chartRect.left + local * stepX,
-        chartRect.bottom - ((allPercents[absoluteIndex] - minY) / range) * chartRect.height,
+        rawX.clamp(chartRect.left, chartRect.right),
+        rawY.clamp(safeRect.top, safeRect.bottom),
       );
     }
 
     final Paint upPaint = Paint()
       ..color = AppColors.upSegment.withOpacity(0.84)
-      ..strokeWidth = 2.7
+      ..strokeWidth = lineStrokeWidth
       ..style = PaintingStyle.stroke;
 
     final Paint downPaint = Paint()
       ..color = AppColors.downSegment.withOpacity(0.84)
-      ..strokeWidth = 2.7
+      ..strokeWidth = lineStrokeWidth
       ..style = PaintingStyle.stroke;
+
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(chartRect, const Radius.circular(10)));
 
     for (int i = visibleStartIndex; i < currentIndex; i++) {
       final Offset p1 = pointAt(i);
@@ -212,9 +250,11 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     }
 
     final Offset currentPoint = pointAt(currentIndex);
-    final double glowRadius = 8 + 7 * pulse;
+    final double glowRadius = pointGlowRadius * (0.72 + 0.28 * pulse);
     canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
-    canvas.drawCircle(currentPoint, 4.8 + 2.4 * pulse, Paint()..color = Colors.white);
+    canvas.drawCircle(currentPoint, pointRadius + 2.4 * pulse, Paint()..color = Colors.white);
+
+    canvas.restore();
 
     _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
   }
@@ -268,6 +308,9 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
         oldDelegate.maxY != maxY ||
         oldDelegate.pulse != pulse ||
         oldDelegate.basePrice != basePrice ||
-        oldDelegate.marketCode != marketCode;
+        oldDelegate.marketCode != marketCode ||
+        oldDelegate.lineStrokeWidth != lineStrokeWidth ||
+        oldDelegate.pointRadius != pointRadius ||
+        oldDelegate.pointGlowRadius != pointGlowRadius;
   }
 }

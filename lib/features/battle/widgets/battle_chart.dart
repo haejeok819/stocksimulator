@@ -45,6 +45,10 @@ class _BattleChartState extends State<BattleChart> {
   double? _smoothedMinY;
   double? _smoothedMaxY;
 
+  static const double _kLineStroke = 3.4;
+  static const double _kPointRadius = 4.4;
+  static const double _kPointGlow = 9.0;
+
   @override
   void didUpdateWidget(covariant BattleChart oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -104,6 +108,9 @@ class _BattleChartState extends State<BattleChart> {
         basePriceB: widget.basePriceB,
         marketCodeA: widget.marketCodeA,
         marketCodeB: widget.marketCodeB,
+        lineStrokeWidth: _kLineStroke,
+        pointRadius: _kPointRadius,
+        pointGlowRadius: _kPointGlow,
       ),
     );
   }
@@ -122,6 +129,9 @@ class _BattleChartPainter extends CustomPainter {
     required this.basePriceB,
     required this.marketCodeA,
     required this.marketCodeB,
+    required this.lineStrokeWidth,
+    required this.pointRadius,
+    required this.pointGlowRadius,
   });
 
   final List<double> seriesA;
@@ -135,6 +145,9 @@ class _BattleChartPainter extends CustomPainter {
   final double basePriceB;
   final String marketCodeA;
   final String marketCodeB;
+  final double lineStrokeWidth;
+  final double pointRadius;
+  final double pointGlowRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -144,6 +157,13 @@ class _BattleChartPainter extends CustomPainter {
     const double yAxisWidth = 64;
     const double xAxisHeight = 24;
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
+    final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
+    final Rect safeRect = Rect.fromLTRB(
+      chartRect.left,
+      chartRect.top + verticalSafety,
+      chartRect.right,
+      chartRect.bottom - verticalSafety,
+    );
 
     final Paint gridPaint = Paint()
       ..color = Colors.white.withOpacity(0.15)
@@ -166,7 +186,7 @@ class _BattleChartPainter extends CustomPainter {
 
     for (int i = 0; i < yTickCount; i++) {
       final double ratio = i / (yTickCount - 1);
-      final double y = chartRect.top + ratio * chartRect.height;
+      final double y = safeRect.top + ratio * safeRect.height;
       final double value = tickValues[i];
       canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint);
       final bool isCurrentBand = i == nearestTick;
@@ -189,20 +209,23 @@ class _BattleChartPainter extends CustomPainter {
     final double stepX = chartRect.width / max(1, visibleCount - 1);
 
     Offset pointFor(int i, double v) {
-      final double x = chartRect.left + (stepX * (i - visibleStartIndex));
-      final double y = chartRect.bottom - ((v - minY) / range) * chartRect.height;
-      return Offset(x, y);
+      final double rawX = chartRect.left + (stepX * (i - visibleStartIndex));
+      final double rawY = safeRect.bottom - ((v - minY) / range) * safeRect.height;
+      return Offset(
+        rawX.clamp(chartRect.left, chartRect.right),
+        rawY.clamp(safeRect.top, safeRect.bottom),
+      );
     }
 
     final bool aLeading = seriesA[currentIndex] >= seriesB[currentIndex];
     final Paint aPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = aLeading ? 3.4 : 2.8
+      ..strokeWidth = aLeading ? lineStrokeWidth : lineStrokeWidth - 0.6
       ..color = const Color(0xFFE54B4B).withOpacity(aLeading ? 1 : 0.84);
 
     final Paint bPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = aLeading ? 2.8 : 3.4
+      ..strokeWidth = aLeading ? lineStrokeWidth - 0.6 : lineStrokeWidth
       ..color = const Color(0xFF266DD3).withOpacity(aLeading ? 0.84 : 1);
 
     final Path aPath = Path();
@@ -220,15 +243,20 @@ class _BattleChartPainter extends CustomPainter {
       }
     }
 
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(chartRect, const Radius.circular(10)));
+
     canvas.drawPath(aPath, aPaint);
     canvas.drawPath(bPath, bPaint);
 
     final Offset endA = pointFor(currentIndex, seriesA[currentIndex]);
     final Offset endB = pointFor(currentIndex, seriesB[currentIndex]);
-    canvas.drawCircle(endA, 9, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
-    canvas.drawCircle(endB, 9, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
-    canvas.drawCircle(endA, 4.4, Paint()..color = const Color(0xFFE54B4B));
-    canvas.drawCircle(endB, 4.4, Paint()..color = const Color(0xFF266DD3));
+    canvas.drawCircle(endA, pointGlowRadius, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
+    canvas.drawCircle(endB, pointGlowRadius, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
+    canvas.drawCircle(endA, pointRadius, Paint()..color = const Color(0xFFE54B4B));
+    canvas.drawCircle(endB, pointRadius, Paint()..color = const Color(0xFF266DD3));
+
+    canvas.restore();
 
     _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
   }
@@ -293,6 +321,9 @@ class _BattleChartPainter extends CustomPainter {
         oldDelegate.basePriceA != basePriceA ||
         oldDelegate.basePriceB != basePriceB ||
         oldDelegate.marketCodeA != marketCodeA ||
-        oldDelegate.marketCodeB != marketCodeB;
+        oldDelegate.marketCodeB != marketCodeB ||
+        oldDelegate.lineStrokeWidth != lineStrokeWidth ||
+        oldDelegate.pointRadius != pointRadius ||
+        oldDelegate.pointGlowRadius != pointGlowRadius;
   }
 }
