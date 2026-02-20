@@ -6,6 +6,7 @@ import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/date_card.dart';
 import 'package:stocksimulator/features/sim/widgets/date_picker_modal.dart';
 import 'package:stocksimulator/features/sim/widgets/date_range_header.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class DateRangeScreen extends StatefulWidget {
@@ -71,7 +72,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> with SingleTickerProv
       if (days.isEmpty) {
         setState(() {
           _loading = false;
-          _error = '거래일 데이터를 찾을 수 없습니다.';
+          _error = '선택한 자산의 연도별 데이터가 없어 기간을 선택할 수 없습니다.';
         });
         return;
       }
@@ -102,7 +103,7 @@ class _DateRangeScreenState extends State<DateRangeScreen> with SingleTickerProv
       }
       setState(() {
         _loading = false;
-        _error = error.toString();
+        _error = toUserMessage(error);
       });
     }
   }
