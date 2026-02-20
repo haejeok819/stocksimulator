@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -9,7 +8,8 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
-import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/services/ad_service.dart';
+import 'package:stocksimulator/shared/utils/app_settings.dart';
 import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
@@ -24,20 +24,176 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   bool _resultDialogShown = false;
   String _previousLeader = 'A';
   bool _flash = false;
+  bool _isProcessingResultAd = false;
 
-  bool get _isMobileRuntime {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-  }
-
+  Timer? _speedUnlockTimer;
+  static const Duration _unlockDuration = Duration(minutes: 5);
   @override
   void initState() {
     super.initState();
+    AppSettings.speed8xUnlockedUntil.addListener(_on8xUnlockChanged);
+    _schedule8xUnlockExpiryCheck();
+    AdService.instance.preloadInterstitial();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       FocusScope.of(context).unfocus();
       ref.read(battlePlaybackControllerProvider.notifier).start();
     });
+  }
+
+
+  @override
+  void dispose() {
+    _speedUnlockTimer?.cancel();
+    AppSettings.speed8xUnlockedUntil.removeListener(_on8xUnlockChanged);
+    super.dispose();
+  }
+
+  void _on8xUnlockChanged() {
+    _schedule8xUnlockExpiryCheck();
+    if (!mounted) return;
+
+    final BattlePlaybackState playback = ref.read(battlePlaybackControllerProvider);
+    if (!AppSettings.is8xSpeedUnlocked && playback.speed == 8) {
+      ref.read(battlePlaybackControllerProvider.notifier).setSpeed(4);
+    }
+
+    setState(() {});
+  }
+
+  void _schedule8xUnlockExpiryCheck() {
+    _speedUnlockTimer?.cancel();
+    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
+    if (unlockUntil == null) {
+      return;
+    }
+
+    final Duration remaining = unlockUntil.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      if (AppSettings.speed8xUnlockedUntil.value != null) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+      return;
+    }
+
+    _speedUnlockTimer = Timer(remaining, () {
+      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+    });
+  }
+
+  Future<bool> _showInterstitialAdGate() async {
+    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
+    if (!mounted || ad == null) {
+      return false;
+    }
+
+    final Completer<bool> completer = Completer<bool>();
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (InterstitialAd ad) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(true);
+      },
+      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(false);
+      },
+    );
+
+    try {
+      ad.show();
+    } catch (_) {
+      ad.dispose();
+      if (!completer.isCompleted) completer.complete(false);
+    }
+
+    final bool watched = await completer.future;
+    AdService.instance.preloadInterstitial();
+    return watched;
+  }
+
+  Future<void> _onResultViewPressed(BattleSeriesData data, BattleSetupState setup) async {
+    if (_isProcessingResultAd || !mounted) return;
+
+    setState(() {
+      _isProcessingResultAd = true;
+    });
+
+    final BattlePlaybackStatus previousStatus = ref.read(battlePlaybackControllerProvider).status;
+    ref.read(battlePlaybackControllerProvider.notifier).pause();
+    final bool watched = await _showInterstitialAdGate();
+
+    if (!mounted) return;
+
+    if (!watched) {
+      setState(() {
+        _isProcessingResultAd = false;
+      });
+      if (previousStatus == BattlePlaybackStatus.running) {
+        ref.read(battlePlaybackControllerProvider.notifier).resume();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('광고 시청이 완료되지 않아 결과를 볼 수 없어요.')),
+      );
+      return;
+    }
+
+    ref.read(battlePlaybackControllerProvider.notifier).skipToEnd();
+    final BattleTick tick = data.tickAt(data.length - 1);
+    ref.read(battleResultProvider.notifier).state = BattleResultState(
+      finalValueA: tick.valueA,
+      finalValueB: tick.valueB,
+      finalReturnA: tick.returnA,
+      finalReturnB: tick.returnB,
+      winner: tick.returnA >= tick.returnB ? 'A' : 'B',
+    );
+
+    setState(() {
+      _isProcessingResultAd = false;
+    });
+    await _showResultDialog(tick: tick, setup: setup);
+  }
+
+  Future<void> _onSpeedSelected(double selectedSpeed) async {
+    if (selectedSpeed != 8) {
+      ref.read(battlePlaybackControllerProvider.notifier).setSpeed(selectedSpeed);
+      return;
+    }
+
+    if (AppSettings.is8xSpeedUnlocked) {
+      ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
+      return;
+    }
+
+    final bool? shouldWatchAd = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('8x 스피드 잠금'),
+          content: const Text('광고를 보고 나면 8x 스피드를 사용할 수 있어요.\n5분 동안은 광고가 다시 나오지 않아요.'),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
+          ],
+        );
+      },
+    );
+
+    if (shouldWatchAd != true || !mounted) return;
+
+    final bool unlocked = await _showInterstitialAdGate();
+    if (!mounted) return;
+
+    if (!unlocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+      );
+      return;
+    }
+
+    AppSettings.unlock8xSpeedFor(_unlockDuration);
+    ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
   }
 
   String _koreanName(StockModel? stock) {
@@ -103,42 +259,6 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     Navigator.of(context).pop();
   }
 
-  Future<void> _onSkip(BattleSeriesData data, BattleSetupState setup) async {
-    ref.read(battlePlaybackControllerProvider.notifier).pause();
-    final bool allowAds = _isMobileRuntime;
-
-    if (allowAds) {
-      try {
-        final InterstitialAd? ad = await AdHelper.loadInterstitial();
-        if (ad != null) {
-          final Completer<void> completer = Completer<void>();
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (InterstitialAd ad) {
-              ad.dispose();
-              completer.complete();
-            },
-            onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-              ad.dispose();
-              completer.complete();
-            },
-          );
-          ad.show();
-          await completer.future;
-        }
-      } catch (_) {}
-    }
-
-    ref.read(battlePlaybackControllerProvider.notifier).skipToEnd();
-    final BattleTick tick = data.tickAt(data.length - 1);
-    ref.read(battleResultProvider.notifier).state = BattleResultState(
-      finalValueA: tick.valueA,
-      finalValueB: tick.valueB,
-      finalReturnA: tick.returnA,
-      finalReturnB: tick.returnB,
-      winner: tick.returnA >= tick.returnB ? 'A' : 'B',
-    );
-    await _showResultDialog(tick: tick, setup: setup);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -172,19 +292,6 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                 });
               });
             }
-          }
-
-            if (playback.status == BattlePlaybackStatus.ended && !_resultDialogShown) {
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              ref.read(battleResultProvider.notifier).state = BattleResultState(
-                finalValueA: tick.valueA,
-                finalValueB: tick.valueB,
-                finalReturnA: tick.returnA,
-                finalReturnB: tick.returnB,
-                winner: leader,
-              );
-              await _showResultDialog(tick: tick, setup: setup);
-            });
           }
 
             final double leadGap = (tick.returnA - tick.returnB).abs();
@@ -289,7 +396,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minWidth: 136, maxWidth: 210),
                         child: OutlinedButton(
-                          onPressed: () => _onSkip(data, setup),
+                          onPressed: _isProcessingResultAd ? null : () => _onResultViewPressed(data, setup),
                           style: OutlinedButton.styleFrom(
                             backgroundColor: const Color(0xFF2F3E5F),
                             foregroundColor: const Color(0xFFEAF0FF),
@@ -298,7 +405,13 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                             textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
                           ),
-                          child: const Text('결과 보기', textAlign: TextAlign.center),
+                          child: _isProcessingResultAd
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('결과 보기', textAlign: TextAlign.center),
                         ),
                       ),
                     ),
@@ -316,16 +429,36 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    SegmentedButton<double>(
-                      segments: const <ButtonSegment<double>>[
-                        ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
-                        ButtonSegment<double>(value: 1, label: Text('1x')),
-                        ButtonSegment<double>(value: 2, label: Text('2x')),
-                        ButtonSegment<double>(value: 4, label: Text('4x')),
-                        ButtonSegment<double>(value: 8, label: Text('8x')),
-                      ],
-                      selected: <double>{playback.speed},
-                      onSelectionChanged: (Set<double> value) => ref.read(battlePlaybackControllerProvider.notifier).setSpeed(value.first),
+                    ValueListenableBuilder<DateTime?>(
+                      valueListenable: AppSettings.speed8xUnlockedUntil,
+                      builder: (BuildContext context, DateTime? unlockUntil, _) {
+                        final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
+
+                        return SegmentedButton<double>(
+                          segments: <ButtonSegment<double>>[
+                            const ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
+                            const ButtonSegment<double>(value: 1, label: Text('1x')),
+                            const ButtonSegment<double>(value: 2, label: Text('2x')),
+                            const ButtonSegment<double>(value: 4, label: Text('4x')),
+                            ButtonSegment<double>(
+                              value: 8,
+                              icon: Icon(
+                                is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                                size: 16,
+                                color: is8xUnlocked ? null : const Color(0xFF8B8B96),
+                              ),
+                              label: Text(
+                                '8x',
+                                style: TextStyle(color: is8xUnlocked ? null : const Color(0xFF8B8B96)),
+                              ),
+                            ),
+                          ],
+                          selected: <double>{playback.speed},
+                          onSelectionChanged: (Set<double> value) {
+                            _onSpeedSelected(value.first);
+                          },
+                        );
+                      },
                     ),
                     if (playback.showCountdown)
                       Padding(
