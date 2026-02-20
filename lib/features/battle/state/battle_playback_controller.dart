@@ -50,11 +50,16 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
             status: BattlePlaybackStatus.ready,
             index: 0,
             position: 0,
-            speed: 1,
+            speed: _defaultSpeed,
             showCountdown: false,
             countdown: 0,
           ),
         );
+
+  static const double _defaultSpeed = 1;
+  static const Duration _safeModeFrameInterval = Duration(milliseconds: 20);
+  static const Duration _normalModeFrameInterval = Duration(milliseconds: 16);
+  static const Duration _safeModeStartDelay = Duration(milliseconds: 120);
 
   final Ref ref;
   Timer? _countdownTimer;
@@ -66,18 +71,18 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   bool get _safeMode => ref.read(battleSetupProvider).safeMode;
 
   void reset() {
-    _countdownTimer?.cancel();
-    _frameTimer?.cancel();
-    _pendingStartTimer?.cancel();
-    _lastFrameAt = null;
-    state = state.copyWith(status: BattlePlaybackStatus.ready, index: 0, position: 0, showCountdown: false, countdown: 0);
+    _cancelTimers(resetFrameClock: true);
+    state = state.copyWith(
+      status: BattlePlaybackStatus.ready,
+      index: 0,
+      position: 0,
+      showCountdown: false,
+      countdown: 0,
+    );
   }
 
   void start() {
-    _countdownTimer?.cancel();
-    _frameTimer?.cancel();
-    _pendingStartTimer?.cancel();
-    _lastFrameAt = null;
+    _cancelTimers(resetFrameClock: true);
     state = state.copyWith(
       status: BattlePlaybackStatus.ready,
       index: 0,
@@ -104,10 +109,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   }
 
   void pause() {
-    _frameTimer?.cancel();
-    _pendingStartTimer?.cancel();
-    _frameTimer = null;
-    _lastFrameAt = null;
+    _cancelFrameAndPendingTimers(resetFrameClock: true);
     state = state.copyWith(status: BattlePlaybackStatus.paused, showCountdown: false);
   }
 
@@ -119,14 +121,17 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   void skipToEnd() {
     final AsyncValue<BattleSeriesData> data = ref.read(battleDataProvider);
     final int end = max(0, (data.valueOrNull?.length ?? 1) - 1);
-    _frameTimer?.cancel();
-    _pendingStartTimer?.cancel();
-    _frameTimer = null;
-    _lastFrameAt = null;
-    state = state.copyWith(index: end, position: end.toDouble(), status: BattlePlaybackStatus.ended, showCountdown: false, countdown: 0);
+    _cancelFrameAndPendingTimers(resetFrameClock: true);
+    state = state.copyWith(
+      index: end,
+      position: end.toDouble(),
+      status: BattlePlaybackStatus.ended,
+      showCountdown: false,
+      countdown: 0,
+    );
   }
 
-  Duration _frameInterval() => _safeMode ? const Duration(milliseconds: 20) : const Duration(milliseconds: 16);
+  Duration _frameInterval() => _safeMode ? _safeModeFrameInterval : _normalModeFrameInterval;
 
   double _basePointsPerSecond(int length) {
     if (length <= 252) {
@@ -143,9 +148,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     if (data == null || data.length <= 1) return;
 
     state = state.copyWith(status: BattlePlaybackStatus.running, showCountdown: false);
-    _frameTimer?.cancel();
-    _pendingStartTimer?.cancel();
-    _lastFrameAt = null;
+    _cancelFrameAndPendingTimers(resetFrameClock: true);
 
     void launch() {
       _pendingStartTimer = null;
@@ -176,7 +179,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     }
 
     if (_safeMode) {
-      _pendingStartTimer = Timer(const Duration(milliseconds: 120), launch);
+      _pendingStartTimer = Timer(_safeModeStartDelay, launch);
     } else {
       launch();
     }
@@ -195,11 +198,25 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     return base + (frac + ((easedFrac - frac) * strength));
   }
 
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
+  void _cancelFrameAndPendingTimers({required bool resetFrameClock}) {
     _frameTimer?.cancel();
     _pendingStartTimer?.cancel();
+    _frameTimer = null;
+    _pendingStartTimer = null;
+    if (resetFrameClock) {
+      _lastFrameAt = null;
+    }
+  }
+
+  void _cancelTimers({required bool resetFrameClock}) {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _cancelFrameAndPendingTimers(resetFrameClock: resetFrameClock);
+  }
+
+  @override
+  void dispose() {
+    _cancelTimers(resetFrameClock: false);
     super.dispose();
   }
 }
