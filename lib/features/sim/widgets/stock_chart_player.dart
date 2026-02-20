@@ -93,39 +93,51 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
       if (v < minY) minY = v;
       if (v > maxY) maxY = v;
     }
-    final double rawRange = maxY - minY;
-    final double pad = rawRange < 0.15 ? 1.2 : max(rawRange * 0.12, 0.6);
-    double targetMin = minY - pad;
-    double targetMax = maxY + pad;
-
     const double minVisualRange = 6.0;
+    const double nearBoundaryThreshold = 0.82;
+    final double rawRange = max(maxY - minY, minVisualRange * 0.35);
+    final double baseHeadroom = max(rawRange * 0.14, 0.8);
+
+    double targetMin = minY - baseHeadroom;
+    double targetMax = maxY + baseHeadroom;
+
+    if (_smoothedMinY != null && _smoothedMaxY != null) {
+      final double previousMin = _smoothedMinY!;
+      final double previousMax = _smoothedMaxY!;
+      final double previousRange = max(previousMax - previousMin, minVisualRange);
+
+      final double upperTrigger = previousMin + (previousRange * nearBoundaryThreshold);
+      if (maxY > upperTrigger) {
+        final double overflow = maxY - upperTrigger;
+        targetMax = max(targetMax, previousMax + (overflow / (1 - nearBoundaryThreshold)));
+      }
+
+      final double lowerTrigger = previousMax - (previousRange * nearBoundaryThreshold);
+      if (minY < lowerTrigger) {
+        final double overflow = lowerTrigger - minY;
+        targetMin = min(targetMin, previousMin - (overflow / (1 - nearBoundaryThreshold)));
+      }
+    }
+
     if ((targetMax - targetMin) < minVisualRange) {
       final double mid = (targetMax + targetMin) / 2;
       targetMin = mid - minVisualRange / 2;
       targetMax = mid + minVisualRange / 2;
     }
 
-    const double nearBoundaryThreshold = 0.88;
-    if (_smoothedMinY != null && _smoothedMaxY != null) {
-      final double previousMin = _smoothedMinY!;
-      final double previousMax = _smoothedMaxY!;
-      final double previousRange = max(previousMax - previousMin, minVisualRange);
-
-      final double topRatio = (maxY - previousMin) / previousRange;
-      if (topRatio >= nearBoundaryThreshold) {
-        final double expandedMax = previousMin + ((maxY - previousMin) / nearBoundaryThreshold);
-        targetMax = max(targetMax, expandedMax);
-      }
-
-      final double bottomRatio = (previousMax - minY) / previousRange;
-      if (bottomRatio >= nearBoundaryThreshold) {
-        final double expandedMin = previousMax - ((previousMax - minY) / nearBoundaryThreshold);
-        targetMin = min(targetMin, expandedMin);
-      }
+    if (_smoothedMinY == null) {
+      _smoothedMinY = targetMin;
+    } else {
+      final double lowerT = targetMin < _smoothedMinY! ? 0.22 : 0.10;
+      _smoothedMinY = ui.lerpDouble(_smoothedMinY, targetMin, lowerT)!;
     }
 
-    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
-    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.16)!;
+    if (_smoothedMaxY == null) {
+      _smoothedMaxY = targetMax;
+    } else {
+      final double upperT = targetMax > _smoothedMaxY! ? 0.22 : 0.10;
+      _smoothedMaxY = ui.lerpDouble(_smoothedMaxY, targetMax, upperT)!;
+    }
 
     if ((_smoothedMaxY! - _smoothedMinY!) < minVisualRange) {
       final double mid = (_smoothedMaxY! + _smoothedMinY!) / 2;
