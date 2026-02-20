@@ -360,16 +360,21 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               ),
               if (_showSkip)
                 Positioned(
-                  top: 20,
-                  right: 20,
+                  top: 14,
+                  right: 16,
                   child: SafeArea(
                     child: SizedBox(
-                      height: 42,
+                      width: 148,
+                      height: 40,
                       child: OutlinedButton(
                         onPressed: _onSkipPressed,
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0x3322222A),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          backgroundColor: const Color(0xAA1F2B3D),
+                          foregroundColor: const Color(0xFFE2E8F2),
+                          side: const BorderSide(color: Color(0x6693A4BF), width: 1),
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.2),
                         ),
                         child: const Text('스킵'),
                       ),

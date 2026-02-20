@@ -213,14 +213,19 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                 right: 16,
                 child: SafeArea(
                   child: SizedBox(
-                    height: 42,
+                    width: 156,
+                    height: 40,
                     child: OutlinedButton(
                       onPressed: () => _onSkip(data, setup),
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0x3322222A),
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        backgroundColor: const Color(0xAA1F2B3D),
+                        foregroundColor: const Color(0xFFE2E8F2),
+                        side: const BorderSide(color: Color(0x6693A4BF), width: 1),
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.2),
                       ),
-                      child: Text(_isMobileRuntime ? '스킵' : '결과'),
+                      child: Text(_isMobileRuntime ? '스킵' : '결과 보기'),
                     ),
                   ),
                 ),
