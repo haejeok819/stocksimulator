@@ -561,6 +561,10 @@ class _BattleAutoSafeModeInfo extends StatelessWidget {
 }
 
 class BattleStartButtons extends ConsumerWidget {
+  bool _isSameAsset(StockModel a, StockModel b) {
+    return a.assetType == b.assetType && a.assetKey == b.assetKey;
+  }
+
   const BattleStartButtons({super.key, required this.setup, required this.pulse});
 
   final BattleSetupState setup;
@@ -578,7 +582,7 @@ class BattleStartButtons extends ConsumerWidget {
     final StockModel a = stocks[random.nextInt(stocks.length)];
     StockModel b = stocks[random.nextInt(stocks.length)];
 
-    while (a.ticker == b.ticker) {
+    while (_isSameAsset(a, b)) {
       b = stocks[random.nextInt(stocks.length)];
     }
 
@@ -616,8 +620,8 @@ class BattleStartButtons extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('종목 A/B를 선택하세요.')));
                   return;
                 }
-                if (setup.stockA!.ticker == setup.stockB!.ticker) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('동일 종목은 선택할 수 없습니다.')));
+                if (_isSameAsset(setup.stockA!, setup.stockB!)) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('동일 자산은 선택할 수 없습니다.')));
                   return;
                 }
                 ref.invalidate(battleDataProvider);
