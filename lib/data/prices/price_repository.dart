@@ -5,7 +5,6 @@ import 'package:stocksimulator/data/models/price_year_data.dart';
 
 /// Repository for flat asset layout:
 /// - assets/prices/KR_top50_meta.json
-/// - assets/prices/US_top50_meta.json
 /// - assets/prices/{MARKET}_{TICKER}_{YEAR}.json.gz
 class PriceRepository {
   PriceRepository({AssetIndexGenerator? assetIndex}) : _assetIndex = assetIndex ?? const AssetIndexGenerator();
@@ -13,7 +12,7 @@ class PriceRepository {
   final AssetIndexGenerator _assetIndex;
   static const int _minimumTradingDays = 30;
 
-  /// Loads KR/US top50 ticker list from meta file.
+  /// Loads KR top50 ticker list from meta file.
   Future<List<String>> loadTop50Tickers(String market) async {
     _validateMarket(market);
     final String metaPath = 'assets/prices/${market}_top50_meta.json';
@@ -168,8 +167,8 @@ class PriceRepository {
   }
 
   void _validateMarket(String market) {
-    if (market != 'KR' && market != 'US') {
-      throw ArgumentError.value(market, 'market', 'market must be KR or US');
+    if (market != 'KR') {
+      throw ArgumentError.value(market, 'market', 'market must be KR');
     }
   }
 

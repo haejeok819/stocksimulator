@@ -10,7 +10,7 @@ class AssetIndexGenerator {
 
   static const String _prefix = 'assets/prices/';
   static final RegExp _flatPricePattern =
-      RegExp(r'^assets/prices/(KR|US)_([^_]+)_(\d{4})\.json\.gz$');
+      RegExp(r'^assets/prices/(KR)_([^_]+)_(\d{4})\.json\.gz$');
 
   /// Returns all price-related asset keys under assets/prices/ (sorted).
   Future<List<String>> listPriceAssets() async {
@@ -25,7 +25,6 @@ class AssetIndexGenerator {
     final List<String> keys = await listPriceAssets();
     final Map<String, Map<String, Set<int>>> mutable = <String, Map<String, Set<int>>>{
       'KR': <String, Set<int>>{},
-      'US': <String, Set<int>>{},
     };
 
     for (final String key in keys) {

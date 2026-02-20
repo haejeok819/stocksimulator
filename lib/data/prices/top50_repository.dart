@@ -54,8 +54,8 @@ class Top50Repository {
   }
 
   void _validateMarket(String market) {
-    if (market != 'KR' && market != 'US') {
-      throw ArgumentError.value(market, 'market', 'market must be KR or US');
+    if (market != 'KR') {
+      throw ArgumentError.value(market, 'market', 'market must be KR');
     }
   }
 }
