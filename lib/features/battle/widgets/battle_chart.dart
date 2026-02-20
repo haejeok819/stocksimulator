@@ -85,7 +85,8 @@ class _BattleChartState extends State<BattleChart> {
     }
 
     const double minVisualRange = 10.0;
-    const double nearBoundaryThreshold = 0.82;
+    const double nearBoundaryThreshold = 0.80;
+    const double desiredOccupancy = 0.72;
     final double rawRange = max(maxY - minY, minVisualRange * 0.35);
     final double baseHeadroom = max(rawRange * 0.18, 1.6);
 
@@ -98,15 +99,15 @@ class _BattleChartState extends State<BattleChart> {
       final double previousRange = max(previousMax - previousMin, minVisualRange);
 
       final double upperTrigger = previousMin + (previousRange * nearBoundaryThreshold);
-      if (maxY > upperTrigger) {
-        final double overflow = maxY - upperTrigger;
-        targetMax = max(targetMax, previousMax + (overflow / (1 - nearBoundaryThreshold)));
+      if (maxY >= upperTrigger) {
+        final double expandedRange = (maxY - previousMin) / desiredOccupancy;
+        targetMax = max(targetMax, previousMin + expandedRange);
       }
 
       final double lowerTrigger = previousMax - (previousRange * nearBoundaryThreshold);
-      if (minY < lowerTrigger) {
-        final double overflow = lowerTrigger - minY;
-        targetMin = min(targetMin, previousMin - (overflow / (1 - nearBoundaryThreshold)));
+      if (minY <= lowerTrigger) {
+        final double expandedRange = (previousMax - minY) / desiredOccupancy;
+        targetMin = min(targetMin, previousMax - expandedRange);
       }
     }
 
@@ -119,15 +120,24 @@ class _BattleChartState extends State<BattleChart> {
     if (_smoothedMinY == null) {
       _smoothedMinY = targetMin;
     } else {
-      final double lowerT = targetMin < _smoothedMinY! ? 0.22 : 0.10;
+      final double lowerT = targetMin < _smoothedMinY! ? 0.35 : 0.08;
       _smoothedMinY = ui.lerpDouble(_smoothedMinY, targetMin, lowerT)!;
     }
 
     if (_smoothedMaxY == null) {
       _smoothedMaxY = targetMax;
     } else {
-      final double upperT = targetMax > _smoothedMaxY! ? 0.22 : 0.10;
+      final double upperT = targetMax > _smoothedMaxY! ? 0.35 : 0.08;
       _smoothedMaxY = ui.lerpDouble(_smoothedMaxY, targetMax, upperT)!;
+    }
+
+    final double smoothedRange = max(_smoothedMaxY! - _smoothedMinY!, minVisualRange);
+    final double guardBand = max(smoothedRange * 0.12, baseHeadroom * 0.45);
+    if (maxY > _smoothedMaxY! - guardBand) {
+      _smoothedMaxY = maxY + guardBand;
+    }
+    if (minY < _smoothedMinY! + guardBand) {
+      _smoothedMinY = minY - guardBand;
     }
 
     return CustomPaint(
