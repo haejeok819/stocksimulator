@@ -208,6 +208,28 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     ),
                   ),
                 ),
+              Positioned(
+                top: 14,
+                right: 16,
+                child: SafeArea(
+                  child: SizedBox(
+                    width: 156,
+                    height: 40,
+                    child: OutlinedButton(
+                      onPressed: () => _onSkip(data, setup),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: const Color(0xAA1F2B3D),
+                        foregroundColor: const Color(0xFFE2E8F2),
+                        side: const BorderSide(color: Color(0x6693A4BF), width: 1),
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+                      ),
+                      child: Text(_isMobileRuntime ? '스킵' : '결과 보기'),
+                    ),
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
@@ -321,12 +343,6 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                       ],
                       selected: <double>{playback.speed},
                       onSelectionChanged: (Set<double> value) => ref.read(battlePlaybackControllerProvider.notifier).setSpeed(value.first),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton(
-                      onPressed: () => _onSkip(data, setup),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-                      child: Text(_isMobileRuntime ? '🎬 광고 보고 스킵하기' : '결과 보기'),
                     ),
                     if (playback.showCountdown)
                       Padding(

@@ -280,11 +280,13 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
         onKeyEvent: (_, __) => KeyEventResult.handled,
         child: DecoratedBox(
           decoration: const BoxDecoration(gradient: PlaybackDesignTokens.screenBackground),
-          child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Stack(
             children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
               Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
               const SizedBox(height: 4),
               Text(_formatPriceByMarket(current.close, marketCode), style: PlaybackDesignTokens.headlineNumber),
@@ -353,17 +355,33 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               ),
               const SizedBox(height: 10),
               Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
               if (_showSkip)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: OutlinedButton(
-                    onPressed: _onSkipPressed,
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
-                    child: const Text('스킵'),
+                Positioned(
+                  top: 14,
+                  right: 16,
+                  child: SafeArea(
+                    child: SizedBox(
+                      width: 148,
+                      height: 40,
+                      child: OutlinedButton(
+                        onPressed: _onSkipPressed,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xAA1F2B3D),
+                          foregroundColor: const Color(0xFFE2E8F2),
+                          side: const BorderSide(color: Color(0x6693A4BF), width: 1),
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+                        ),
+                        child: const Text('스킵'),
+                      ),
+                    ),
                   ),
                 ),
             ],
-            ),
           ),
         ),
       ),

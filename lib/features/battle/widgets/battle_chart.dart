@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
@@ -46,6 +47,12 @@ class BattleChart extends StatefulWidget {
 class _BattleChartState extends State<BattleChart> {
   double? _smoothedMinY;
   double? _smoothedMaxY;
+  double? _targetMinY;
+  double? _targetMaxY;
+  double? _axisStep;
+  int _shrinkHoldFrames = 0;
+  int _stableInsideFrames = 0;
+  int _lastVisibleCount = 0;
 
   static const double _kLineStroke = 3.4;
   static const double _kPointRadius = 4.4;
@@ -57,6 +64,12 @@ class _BattleChartState extends State<BattleChart> {
     if (oldWidget.seriesA.length != widget.seriesA.length || oldWidget.seriesB.length != widget.seriesB.length) {
       _smoothedMinY = null;
       _smoothedMaxY = null;
+      _targetMinY = null;
+      _targetMaxY = null;
+      _axisStep = null;
+      _shrinkHoldFrames = 0;
+      _stableInsideFrames = 0;
+      _lastVisibleCount = 0;
     }
   }
 
@@ -67,8 +80,9 @@ class _BattleChartState extends State<BattleChart> {
     }
 
     final int length = min(widget.seriesA.length, widget.seriesB.length);
-    final int safeIndex = widget.playbackIndex.clamp(0, length - 1);
-    final int renderEndIndex = widget.playbackPosition.ceil().clamp(0, length - 1);
+    final double safePlaybackPosition = widget.playbackPosition.clamp(0, (length - 1).toDouble());
+    final int safeIndex = safePlaybackPosition.floor();
+    final int renderEndIndex = safePlaybackPosition.ceil();
     final int visibleStart = battleVisibleStartIndex(totalCount: length, currentIndex: renderEndIndex);
 
     double minY = widget.seriesA[visibleStart];
@@ -82,20 +96,116 @@ class _BattleChartState extends State<BattleChart> {
       if (b > maxY) maxY = b;
     }
 
-    final double rawRange = maxY - minY;
-    final double padded = rawRange < 0.2 ? 8.0 : max(rawRange * 0.18, 1.2);
-    double targetMin = minY - padded;
-    double targetMax = maxY + padded;
+    const double minVisualRange = 10.0;
+    const double nearBoundaryThreshold = 0.80;
+    const double desiredOccupancy = 0.72;
+    final double rawRange = max(maxY - minY, minVisualRange * 0.35);
+    final double baseHeadroom = max(rawRange * 0.18, 1.6);
 
-    final double minVisualRange = 10.0;
+    double targetMin = minY - baseHeadroom;
+    double targetMax = maxY + baseHeadroom;
+
+    if (_smoothedMinY != null && _smoothedMaxY != null) {
+      final double previousMin = _smoothedMinY!;
+      final double previousMax = _smoothedMaxY!;
+      final double previousRange = max(previousMax - previousMin, minVisualRange);
+
+      final double upperTrigger = previousMin + (previousRange * nearBoundaryThreshold);
+      if (maxY >= upperTrigger) {
+        final double expandedRange = (maxY - previousMin) / desiredOccupancy;
+        targetMax = max(targetMax, previousMin + expandedRange);
+      }
+
+      final double lowerTrigger = previousMax - (previousRange * nearBoundaryThreshold);
+      if (minY <= lowerTrigger) {
+        final double expandedRange = (previousMax - minY) / desiredOccupancy;
+        targetMin = min(targetMin, previousMax - expandedRange);
+      }
+    }
+
     if ((targetMax - targetMin) < minVisualRange) {
       final double mid = (targetMax + targetMin) / 2;
       targetMin = mid - minVisualRange / 2;
       targetMax = mid + minVisualRange / 2;
     }
 
-    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
-    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.16)!;
+    final int visibleCount = renderEndIndex - visibleStart + 1;
+    final bool windowGrowing = visibleCount > _lastVisibleCount;
+    _lastVisibleCount = visibleCount;
+
+    if (_targetMinY == null || _targetMaxY == null) {
+      _targetMinY = targetMin;
+      _targetMaxY = targetMax;
+      _shrinkHoldFrames = 20;
+    } else {
+      final double currentTargetRange = max(_targetMaxY! - _targetMinY!, minVisualRange);
+      final double minDeltaRatio = (targetMin - _targetMinY!).abs() / currentTargetRange;
+      final double maxDeltaRatio = (targetMax - _targetMaxY!).abs() / currentTargetRange;
+      final bool inDeadband = minDeltaRatio < 0.015 && maxDeltaRatio < 0.015;
+      if (inDeadband) {
+        targetMin = _targetMinY!;
+        targetMax = _targetMaxY!;
+      }
+
+      final bool expansionRequested = targetMin < _targetMinY! || targetMax > _targetMaxY!;
+      if (expansionRequested || windowGrowing) {
+        _targetMinY = min(_targetMinY!, targetMin);
+        _targetMaxY = max(_targetMaxY!, targetMax);
+        _shrinkHoldFrames = windowGrowing ? 24 : 14;
+        _stableInsideFrames = 0;
+      } else {
+        if (_shrinkHoldFrames > 0) {
+          _shrinkHoldFrames -= 1;
+        }
+        final double comfortMargin = currentTargetRange * 0.20;
+        final bool comfortablyInside =
+            minY > _targetMinY! + comfortMargin && maxY < _targetMaxY! - comfortMargin;
+        _stableInsideFrames = comfortablyInside ? _stableInsideFrames + 1 : 0;
+        if (_shrinkHoldFrames == 0 && _stableInsideFrames >= 10) {
+          _targetMinY = ui.lerpDouble(_targetMinY, targetMin, 0.06)!;
+          _targetMaxY = ui.lerpDouble(_targetMaxY, targetMax, 0.06)!;
+        }
+      }
+    }
+
+    if (_smoothedMinY == null) {
+      _smoothedMinY = _targetMinY;
+    } else {
+      final double lowerT = _targetMinY! < _smoothedMinY! ? 0.35 : 0.08;
+      _smoothedMinY = ui.lerpDouble(_smoothedMinY, _targetMinY, lowerT)!;
+    }
+
+    if (_smoothedMaxY == null) {
+      _smoothedMaxY = _targetMaxY;
+    } else {
+      final double upperT = _targetMaxY! > _smoothedMaxY! ? 0.35 : 0.08;
+      _smoothedMaxY = ui.lerpDouble(_smoothedMaxY, _targetMaxY, upperT)!;
+    }
+
+    final double smoothedRange = max(_smoothedMaxY! - _smoothedMinY!, minVisualRange);
+    final double desiredStep = max(smoothedRange / 3, minVisualRange / 3);
+    if (_axisStep == null) {
+      _axisStep = desiredStep;
+    } else {
+      final double stepDeltaRatio = (desiredStep - _axisStep!).abs() / max(_axisStep!, 0.0001);
+      if (stepDeltaRatio > 0.12) {
+        _axisStep = ui.lerpDouble(_axisStep, desiredStep, 0.28)!;
+      }
+    }
+
+    final double midY = (_smoothedMinY! + _smoothedMaxY!) / 2;
+    final double half = max((_axisStep ?? desiredStep) * 1.5, minVisualRange / 2);
+    _smoothedMinY = midY - half;
+    _smoothedMaxY = midY + half;
+
+    final double stabilizedRange = max(_smoothedMaxY! - _smoothedMinY!, minVisualRange);
+    final double guardBand = max(stabilizedRange * 0.12, baseHeadroom * 0.45);
+    if (maxY > _smoothedMaxY! - guardBand) {
+      _smoothedMaxY = maxY + guardBand;
+    }
+    if (minY < _smoothedMinY! + guardBand) {
+      _smoothedMinY = minY - guardBand;
+    }
 
     return CustomPaint(
       size: Size.infinite,
@@ -106,7 +216,7 @@ class _BattleChartState extends State<BattleChart> {
         visibleStartIndex: visibleStart,
         currentIndex: safeIndex,
         renderEndIndex: renderEndIndex,
-        playbackPosition: widget.playbackPosition,
+        playbackPosition: safePlaybackPosition,
         minY: _smoothedMinY!,
         maxY: _smoothedMaxY!,
         basePriceA: widget.basePriceA,
@@ -158,23 +268,27 @@ class _BattleChartPainter extends CustomPainter {
   final double pointRadius;
   final double pointGlowRadius;
   static const double _kTopExtraPadding = 6.0;
+  static int _debugFrameCounter = 0;
 
   @override
   void paint(Canvas canvas, Size size) {
     final int length = min(seriesA.length, seriesB.length);
-    if (length < 2 || currentIndex < visibleStartIndex) return;
+    if (length == 0 || currentIndex < visibleStartIndex) return;
+
+    final _BattleChartGeometry geometry = _BattleChartGeometry.create(
+      size: size,
+      minY: minY,
+      maxY: maxY,
+      lineStrokeWidth: lineStrokeWidth,
+      pointGlowRadius: pointGlowRadius,
+      topExtraPadding: _kTopExtraPadding,
+      visibleStartIndex: visibleStartIndex,
+      renderEndIndex: renderEndIndex,
+      currentIndex: currentIndex,
+      playbackPosition: playbackPosition,
+    );
 
     const double yAxisWidth = 64;
-    const double xAxisHeight = 24;
-    final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
-    final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
-    final double topSafety = verticalSafety + _kTopExtraPadding;
-    final Rect safeRect = Rect.fromLTRB(
-      chartRect.left,
-      chartRect.top + topSafety,
-      chartRect.right,
-      chartRect.bottom - verticalSafety,
-    );
 
     final Paint gridPaint = Paint()
       ..color = Colors.white.withOpacity(0.15)
@@ -197,9 +311,9 @@ class _BattleChartPainter extends CustomPainter {
 
     for (int i = 0; i < yTickCount; i++) {
       final double ratio = i / (yTickCount - 1);
-      final double y = safeRect.top + ratio * safeRect.height;
+      final double y = geometry.safeRect.top + ratio * geometry.safeRect.height;
       final double value = tickValues[i];
-      canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint);
+      canvas.drawLine(Offset(geometry.chartRect.left, y), Offset(geometry.chartRect.right, y), gridPaint);
       final bool isCurrentBand = i == nearestTick;
       final TextPainter tp = TextPainter(
         text: TextSpan(
@@ -212,20 +326,7 @@ class _BattleChartPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: yAxisWidth - 8);
-      tp.paint(canvas, Offset(chartRect.right + 8, y - tp.height / 2));
-    }
-
-    final int visibleCount = renderEndIndex - visibleStartIndex + 1;
-    final double range = max(maxY - minY, 0.0001);
-    final double stepX = chartRect.width / max(1, visibleCount - 1);
-
-    Offset pointFor(int i, double v) {
-      final double rawX = chartRect.left + (stepX * (i - visibleStartIndex));
-      final double rawY = safeRect.bottom - ((v - minY) / range) * safeRect.height;
-      return Offset(
-        rawX.clamp(chartRect.left, chartRect.right),
-        rawY.clamp(safeRect.top, safeRect.bottom),
-      );
+      tp.paint(canvas, Offset(geometry.chartRect.right + 8, y - tp.height / 2));
     }
 
     final bool aLeading = seriesA[currentIndex] >= seriesB[currentIndex];
@@ -243,8 +344,8 @@ class _BattleChartPainter extends CustomPainter {
     final Path bPath = Path();
 
     for (int i = visibleStartIndex; i <= currentIndex; i++) {
-      final Offset pa = pointFor(i, seriesA[i]);
-      final Offset pb = pointFor(i, seriesB[i]);
+      final Offset pa = geometry.pointFor(i, seriesA[i]);
+      final Offset pb = geometry.pointFor(i, seriesB[i]);
       if (i == visibleStartIndex) {
         aPath.moveTo(pa.dx, pa.dy);
         bPath.moveTo(pb.dx, pb.dy);
@@ -254,42 +355,38 @@ class _BattleChartPainter extends CustomPainter {
       }
     }
 
-    final int nextIndex = min(currentIndex + 1, length - 1);
-    final double segmentT = (playbackPosition - currentIndex).clamp(0, 1);
+    final _HeadSegment aHead = geometry.headSegment(seriesA);
+    final _HeadSegment bHead = geometry.headSegment(seriesB);
 
-    final Offset aSegmentStart = pointFor(currentIndex, seriesA[currentIndex]);
-    final Offset aSegmentEnd = pointFor(nextIndex, seriesA[nextIndex]);
-    final Offset bSegmentStart = pointFor(currentIndex, seriesB[currentIndex]);
-    final Offset bSegmentEnd = pointFor(nextIndex, seriesB[nextIndex]);
-
-    final Offset endA = Offset(
-      ui.lerpDouble(aSegmentStart.dx, aSegmentEnd.dx, segmentT)!,
-      ui.lerpDouble(aSegmentStart.dy, aSegmentEnd.dy, segmentT)!,
-    );
-    final Offset endB = Offset(
-      ui.lerpDouble(bSegmentStart.dx, bSegmentEnd.dx, segmentT)!,
-      ui.lerpDouble(bSegmentStart.dy, bSegmentEnd.dy, segmentT)!,
-    );
-
-    if (nextIndex > currentIndex && segmentT > 0) {
-      aPath.lineTo(endA.dx, endA.dy);
-      bPath.lineTo(endB.dx, endB.dy);
+    if (aHead.nextIndex > aHead.baseIndex && aHead.t > 0) {
+      aPath.lineTo(aHead.end.dx, aHead.end.dy);
+    }
+    if (bHead.nextIndex > bHead.baseIndex && bHead.t > 0) {
+      bPath.lineTo(bHead.end.dx, bHead.end.dy);
     }
 
     canvas.save();
-    canvas.clipRRect(RRect.fromRectAndRadius(chartRect, const Radius.circular(10)));
+    canvas.clipRRect(RRect.fromRectAndRadius(geometry.chartRect, const Radius.circular(10)));
 
     canvas.drawPath(aPath, aPaint);
     canvas.drawPath(bPath, bPaint);
 
-    canvas.drawCircle(endA, pointGlowRadius, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
-    canvas.drawCircle(endB, pointGlowRadius, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
-    canvas.drawCircle(endA, pointRadius, Paint()..color = const Color(0xFFE54B4B));
-    canvas.drawCircle(endB, pointRadius, Paint()..color = const Color(0xFF266DD3));
+    canvas.drawCircle(aHead.end, pointGlowRadius, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
+    canvas.drawCircle(bHead.end, pointGlowRadius, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
+    canvas.drawCircle(aHead.end, pointRadius, Paint()..color = const Color(0xFFE54B4B));
+    canvas.drawCircle(bHead.end, pointRadius, Paint()..color = const Color(0xFF266DD3));
 
     canvas.restore();
 
-    _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
+    if (kDebugMode && (_debugFrameCounter++ % 30 == 0)) {
+      debugPrint(
+        '[BattleChartSync] progress(index=$currentIndex,pos=${playbackPosition.toStringAsFixed(3)}) '
+        'plotRect=${geometry.chartRect} yRange=[${geometry.minY.toStringAsFixed(3)},${geometry.maxY.toStringAsFixed(3)}] '
+        'headA=${aHead.end} headB=${bHead.end}',
+      );
+    }
+
+    _drawXLabels(canvas, geometry.chartRect, geometry.stepX, visibleStartIndex, currentIndex);
   }
 
   void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
@@ -359,4 +456,98 @@ class _BattleChartPainter extends CustomPainter {
         oldDelegate.pointRadius != pointRadius ||
         oldDelegate.pointGlowRadius != pointGlowRadius;
   }
+}
+
+class _BattleChartGeometry {
+  _BattleChartGeometry({
+    required this.chartRect,
+    required this.safeRect,
+    required this.minY,
+    required this.maxY,
+    required this.stepX,
+    required this.visibleStartIndex,
+    required this.currentIndex,
+    required this.renderEndIndex,
+    required this.playbackPosition,
+  });
+
+  factory _BattleChartGeometry.create({
+    required Size size,
+    required double minY,
+    required double maxY,
+    required double lineStrokeWidth,
+    required double pointGlowRadius,
+    required double topExtraPadding,
+    required int visibleStartIndex,
+    required int currentIndex,
+    required int renderEndIndex,
+    required double playbackPosition,
+  }) {
+    const double yAxisWidth = 64;
+    const double xAxisHeight = 24;
+    final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
+    final double verticalSafety = max(pointGlowRadius, lineStrokeWidth * 0.5) + 1;
+    final double topSafety = verticalSafety + topExtraPadding;
+    final Rect safeRect = Rect.fromLTRB(
+      chartRect.left,
+      chartRect.top + topSafety,
+      chartRect.right,
+      chartRect.bottom - verticalSafety,
+    );
+    final int visibleCount = renderEndIndex - visibleStartIndex + 1;
+    final double stepX = chartRect.width / max(1, visibleCount - 1);
+    return _BattleChartGeometry(
+      chartRect: chartRect,
+      safeRect: safeRect,
+      minY: minY,
+      maxY: maxY,
+      stepX: stepX,
+      visibleStartIndex: visibleStartIndex,
+      currentIndex: currentIndex,
+      renderEndIndex: renderEndIndex,
+      playbackPosition: playbackPosition,
+    );
+  }
+
+  final Rect chartRect;
+  final Rect safeRect;
+  final double minY;
+  final double maxY;
+  final double stepX;
+  final int visibleStartIndex;
+  final int currentIndex;
+  final int renderEndIndex;
+  final double playbackPosition;
+
+  double get _range => max(maxY - minY, 0.0001);
+
+  Offset pointFor(int absoluteIndex, double value) {
+    final double rawX = chartRect.left + (stepX * (absoluteIndex - visibleStartIndex));
+    final double rawY = safeRect.bottom - ((value - minY) / _range) * safeRect.height;
+    return Offset(
+      rawX.clamp(chartRect.left, chartRect.right),
+      rawY.clamp(safeRect.top, safeRect.bottom),
+    );
+  }
+
+  _HeadSegment headSegment(List<double> series) {
+    final int nextIndex = min(currentIndex + 1, renderEndIndex);
+    final double t = (playbackPosition - currentIndex).clamp(0, 1);
+    final Offset start = pointFor(currentIndex, series[currentIndex]);
+    final Offset endPoint = pointFor(nextIndex, series[nextIndex]);
+    final Offset end = Offset(
+      ui.lerpDouble(start.dx, endPoint.dx, t)!,
+      ui.lerpDouble(start.dy, endPoint.dy, t)!,
+    );
+    return _HeadSegment(baseIndex: currentIndex, nextIndex: nextIndex, t: t, end: end);
+  }
+}
+
+class _HeadSegment {
+  const _HeadSegment({required this.baseIndex, required this.nextIndex, required this.t, required this.end});
+
+  final int baseIndex;
+  final int nextIndex;
+  final double t;
+  final Offset end;
 }
