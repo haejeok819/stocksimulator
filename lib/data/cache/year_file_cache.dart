@@ -3,7 +3,7 @@ import 'dart:collection';
 import 'package:stocksimulator/data/models/price_year_data.dart';
 
 class YearFileCache {
-  YearFileCache({this.capacity = 5});
+  YearFileCache({int capacity = 5}) : capacity = capacity < 0 ? 0 : capacity;
 
   final int capacity;
   final LinkedHashMap<String, List<PricePoint>> _cache = LinkedHashMap<String, List<PricePoint>>();
@@ -24,6 +24,10 @@ class YearFileCache {
     required int year,
     required List<PricePoint> points,
   }) {
+    if (capacity == 0) {
+      return;
+    }
+
     final String key = _key(market: market, ticker: ticker, year: year);
     _cache.remove(key);
     _cache[key] = points;

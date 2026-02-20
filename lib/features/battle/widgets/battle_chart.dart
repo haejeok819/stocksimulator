@@ -184,9 +184,6 @@ class _BattleChartPainter extends CustomPainter {
   }
 
   String _formatPrice(double price, String marketCode) {
-    if (marketCode == 'US') {
-      return '\$${AppNumberFormat.formatPrice(price, decimals: 2)}';
-    }
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
