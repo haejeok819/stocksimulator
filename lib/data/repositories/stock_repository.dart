@@ -214,35 +214,38 @@ class StockRepository {
       return cached;
     }
 
-    final String path = AssetPaths.assetPathMetaListByAsset(assetType);
-    try {
-      final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
-      if (decodedObject is! List<Object?>) {
-        return <StockModel>[];
+    final List<String> candidates = AssetPaths.assetPathMetaListCandidatesByAsset(assetType);
+    for (final String path in candidates) {
+      try {
+        final Object? decodedObject = jsonDecode(await rootBundle.loadString(path));
+        if (decodedObject is! List<Object?>) {
+          continue;
+        }
+
+        final List<Map<String, dynamic>> typedMetaList =
+            (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
+                .asMap()
+                .entries
+                .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
+                .toList();
+
+        final List<StockModel> loaded = typedMetaList
+            .asMap()
+            .entries
+            .map(
+              (MapEntry<int, Map<String, dynamic>> entry) =>
+                  StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
+            )
+            .where((StockModel stock) => stock.ticker.isNotEmpty)
+            .toList();
+
+        _stockCache[cacheKey] = loaded;
+        return loaded;
+      } catch (error) {
+        debugPrint('Top meta load failed: $path ($error)');
       }
-
-      final List<Map<String, dynamic>> typedMetaList =
-          (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
-              .asMap()
-              .entries
-              .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
-              .toList();
-
-      final List<StockModel> loaded = typedMetaList
-          .asMap()
-          .entries
-          .map(
-            (MapEntry<int, Map<String, dynamic>> entry) =>
-                StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
-          )
-          .where((StockModel stock) => stock.ticker.isNotEmpty)
-          .toList();
-
-      _stockCache[cacheKey] = loaded;
-      return loaded;
-    } catch (error) {
-      debugPrint('Top meta load failed: $path ($error)');
-      return <StockModel>[];
     }
+
+    throw StateError('메타 파일이 없습니다');
   }
 }

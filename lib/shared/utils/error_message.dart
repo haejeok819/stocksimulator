@@ -16,6 +16,10 @@ String toUserMessage(Object error, {String fallback = '요청을 처리하지 �
     return '선택한 자산의 데이터 파일을 찾을 수 없습니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도해주세요.';
   }
 
+  if (normalized.contains('메타 파일이 없습니다')) {
+    return '메타 파일이 없습니다';
+  }
+
   if (normalized.contains('거래일 데이터를 찾을 수 없습니다') || normalized.contains('연도별 데이터가 없습니다')) {
     return '선택한 자산의 거래일 데이터가 아직 준비되지 않았습니다.';
   }
