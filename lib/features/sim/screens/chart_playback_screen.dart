@@ -12,7 +12,6 @@ import 'package:stocksimulator/data/repositories/history_repository.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
-import 'package:stocksimulator/shared/utils/ad_helper.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
@@ -48,11 +47,17 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   bool _playing = true;
   double _speed = 1;
 
+  Timer? _speedUnlockTimer;
+  static const Duration _unlockDuration = Duration(minutes: 5);
+  bool _isSpeedFlowInProgress = false;
+
   @override
   void initState() {
     super.initState();
     _speed = 1;
     _frameTicker = createTicker(_onFrameTick);
+    AppSettings.speed8xUnlockedUntil.addListener(_on8xUnlockChanged);
+    _schedule8xUnlockExpiryCheck();
     AdService.instance.preloadInterstitial();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -68,15 +73,154 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   @override
   void dispose() {
+    _skipTimer?.cancel();
+    _speedUnlockTimer?.cancel();
+    AppSettings.speed8xUnlockedUntil.removeListener(_on8xUnlockChanged);
     if (_frameTicker.isActive) {
       _frameTicker.stop();
     }
     _frameTicker.dispose();
-    _skipTimer?.cancel();
+    super.dispose();
+  }
+
+
+  void _on8xUnlockChanged() {
+    _schedule8xUnlockExpiryCheck();
+    if (!mounted) return;
+    setState(() {
+      if (!AppSettings.is8xSpeedUnlocked && _speed == 8) {
+        _speed = 4;
+      }
+    });
+  }
+
+  void _schedule8xUnlockExpiryCheck() {
+    _speedUnlockTimer?.cancel();
+    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
+    if (unlockUntil == null) {
+      return;
+    }
+
+    final Duration remaining = unlockUntil.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      if (AppSettings.speed8xUnlockedUntil.value != null) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+      return;
+    }
+
+    _speedUnlockTimer = Timer(remaining, () {
+      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+    });
+  }
+
+  Future<bool> _showRewardedAdFor8xUnlock() async {
+    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
+    if (!mounted || ad == null) {
+      return false;
+    }
+
+    final Completer<bool> completer = Completer<bool>();
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (InterstitialAd ad) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(true);
+      },
+      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+        ad.dispose();
+        if (!completer.isCompleted) completer.complete(false);
+      },
+    );
+
+    try {
+      ad.show();
+    } catch (_) {
+      ad.dispose();
+      if (!completer.isCompleted) completer.complete(false);
+    }
+
+    final bool watched = await completer.future;
+    AdService.instance.preloadInterstitial();
+    return watched;
+  }
+
+
+  bool _pausePlaybackForInteraction() {
+    final bool wasPlaying = _playing;
+    _playing = false;
+    _lastFrameElapsed = null;
     if (_frameTicker.isActive) {
       _frameTicker.stop();
     }
-    super.dispose();
+    return wasPlaying;
+  }
+
+  void _resumePlaybackIfNeeded(bool shouldResume) {
+    if (!mounted || !shouldResume) return;
+    setState(() {
+      _playing = true;
+      _lastFrameElapsed = null;
+      if (!_frameTicker.isActive) {
+        _frameTicker.start();
+      }
+    });
+  }
+
+  Future<void> _onSpeedSelected(double selectedSpeed) async {
+    if (_isSpeedFlowInProgress || !mounted) return;
+
+    final bool shouldResumeAfterFlow = _pausePlaybackForInteraction();
+
+    if (selectedSpeed != 8) {
+      setState(() {
+        _speed = selectedSpeed;
+      });
+      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
+      return;
+    }
+
+    if (AppSettings.is8xSpeedUnlocked) {
+      setState(() {
+        _speed = 8;
+      });
+      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
+      return;
+    }
+
+    _isSpeedFlowInProgress = true;
+
+    final bool? shouldWatchAd = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('8x 스피드 잠금'),
+          content: const Text('광고를 보고나서 8x 스피드를 할 수 있어요.\n5분 동안은 광고가 뜨지 않아요.'),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
+          ],
+        );
+      },
+    );
+
+    if (shouldWatchAd == true && mounted) {
+      final bool unlocked = await _showRewardedAdFor8xUnlock();
+      if (mounted && unlocked) {
+        AppSettings.unlock8xSpeedFor(_unlockDuration);
+        setState(() {
+          _speed = 8;
+        });
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+        );
+      }
+    }
+
+    _isSpeedFlowInProgress = false;
+    _resumePlaybackIfNeeded(shouldResumeAfterFlow);
   }
 
   bool get _isWindowsDesktop {
@@ -156,8 +300,12 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   Future<void> _onSkipPressed() async {
     _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
 
-    final InterstitialAd? ad = await AdHelper.loadInterstitial();
+    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (ad == null) {
       _showResult();
       return;
@@ -342,16 +490,37 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
                 ],
               ),
               const SizedBox(height: 10),
-              SegmentedButton<double>(
-                segments: const <ButtonSegment<double>>[
-                  ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
-                  ButtonSegment<double>(value: 1, label: Text('1x')),
-                  ButtonSegment<double>(value: 2, label: Text('2x')),
-                  ButtonSegment<double>(value: 4, label: Text('4x')),
-                  ButtonSegment<double>(value: 8, label: Text('8x')),
-                ],
-                selected: <double>{_speed},
-                onSelectionChanged: (Set<double> value) => setState(() { _speed = value.first; _lastFrameElapsed = null; }),
+              ValueListenableBuilder<DateTime?>(
+                valueListenable: AppSettings.speed8xUnlockedUntil,
+                builder: (BuildContext context, DateTime? unlockUntil, _) {
+                  final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
+
+                  return SegmentedButton<double>(
+                    segments: <ButtonSegment<double>>[
+                      const ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
+                      const ButtonSegment<double>(value: 1, label: Text('1x')),
+                      const ButtonSegment<double>(value: 2, label: Text('2x')),
+                      const ButtonSegment<double>(value: 4, label: Text('4x')),
+                      ButtonSegment<double>(
+                        value: 8,
+                        enabled: true,
+                        icon: Icon(
+                          is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                          size: 16,
+                          color: is8xUnlocked ? null : const Color(0xFF8B8B96),
+                        ),
+                        label: Text(
+                          '8x',
+                          style: TextStyle(color: is8xUnlocked ? null : const Color(0xFF8B8B96)),
+                        ),
+                      ),
+                    ],
+                    selected: <double>{_speed},
+                    onSelectionChanged: (Set<double> value) {
+                      _onSpeedSelected(value.first);
+                    },
+                  );
+                },
               ),
               const SizedBox(height: 10),
               Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
