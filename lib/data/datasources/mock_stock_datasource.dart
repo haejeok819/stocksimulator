@@ -5,7 +5,7 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 class MockStockDataSource {
   final Random _random = Random();
 
-  List<StockModel> fetchStocks({required StockMarket market}) {
+  List<StockModel> fetchStocks({AssetType assetType = AssetType.stockKR}) {
     final List<String> krNames = <String>[
       '삼성전자',
       'SK하이닉스',
@@ -25,9 +25,10 @@ class MockStockDataSource {
       final String ticker = (5930 + index).toString().padLeft(6, '0');
       return StockModel(
         ticker: ticker,
+        assetType: assetType,
+        assetKey: ticker,
         nameKo: '$base ${rank}위',
         nameEn: '',
-        market: 'KR',
         rank: rank,
       );
     });

@@ -15,7 +15,10 @@ class SimulationFlowState {
   DateTime get startDate => _cache.startDate;
   DateTime get endDate => _cache.endDate;
   int get investment => _cache.investment;
-  String get marketCode => _cache.selectedMarket;
+  AssetType get assetType => _cache.selectedAssetType;
+
+  /// Legacy getter used by existing screens.
+  String get marketCode => _cache.selectedAssetType.code;
 
   InvestMode investMode = InvestMode.lumpSum;
   DcaInterval dcaInterval = DcaInterval.monthly;
@@ -24,7 +27,7 @@ class SimulationFlowState {
   void selectStock(StockModel stock) {
     selectedStock = stock;
     _cache.selectedTicker = stock.ticker;
-    _cache.selectedMarket = stock.market;
+    _cache.selectedAssetType = stock.assetType;
   }
 
   void setDateRange(DateTime start, DateTime end) {

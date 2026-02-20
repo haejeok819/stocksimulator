@@ -2,20 +2,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:stocksimulator/data/assets/asset_index_generator.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
+import 'package:stocksimulator/data/models/stock_model.dart';
 
-/// Repository for flat asset layout:
-/// - assets/prices/KR_top50_meta.json
-/// - assets/prices/{MARKET}_{TICKER}_{YEAR}.json.gz
 class PriceRepository {
   PriceRepository({AssetIndexGenerator? assetIndex}) : _assetIndex = assetIndex ?? const AssetIndexGenerator();
 
   final AssetIndexGenerator _assetIndex;
   static const int _minimumTradingDays = 30;
 
-  /// Loads KR top50 ticker list from meta file.
-  Future<List<String>> loadTop50Tickers(String market) async {
-    _validateMarket(market);
-    final String metaPath = 'assets/prices/${market}_top50_meta.json';
+  Future<List<String>> loadTop50TickersByAsset(AssetType assetType) async {
+    _validateAssetType(assetType);
+    final String marketCode = assetType.code;
+    final String metaPath = 'assets/prices/${marketCode}_top50_meta.json';
 
     final Object? decoded = await _assetIndex.loadJsonAsset(metaPath);
     final List<Map<String, Object?>> rows = _extractMetaRows(decoded, metaPath);
@@ -27,19 +25,19 @@ class PriceRepository {
         .toList();
   }
 
-  /// Loads one year price data from flat gzip asset.
-  Future<Object?> loadYearData({
-    required String market,
-    required String ticker,
+  Future<Object?> loadYearDataByAsset({
+    required AssetType assetType,
+    required String assetKey,
     required int year,
   }) async {
-    _validateMarket(market);
-    final String assetPath = _assetIndex.flatYearAssetPath(market: market, ticker: ticker, year: year);
+    _validateAssetType(assetType);
+    final String marketCode = assetType.code;
+    final String assetPath = _assetIndex.flatYearAssetPath(market: marketCode, ticker: assetKey, year: year);
 
     final List<String> keys = await _assetIndex.listPriceAssets();
     if (!keys.contains(assetPath)) {
       throw StateError(
-        'Requested asset does not exist. prefix=assets/prices/, market=$market, ticker=$ticker, year=$year, triedAssetPath=$assetPath',
+        'Requested asset does not exist. prefix=assets/prices/, assetType=$assetType, assetKey=$assetKey, year=$year, triedAssetPath=$assetPath',
       );
     }
 
@@ -50,40 +48,38 @@ class PriceRepository {
     }
   }
 
-  /// Returns available years for one ticker in flat layout.
-  Future<List<int>> availableYears({required String market, required String ticker}) async {
-    _validateMarket(market);
+  Future<List<int>> availableYearsByAsset({
+    required AssetType assetType,
+    required String assetKey,
+  }) async {
+    _validateAssetType(assetType);
     final Map<String, Map<String, List<int>>> index = await _assetIndex.buildFlatIndex();
-    final List<int> years = index[market]?[ticker] ?? <int>[];
+    final List<int> years = index[assetType.code]?[assetKey] ?? <int>[];
     return List<int>.from(years)..sort();
   }
 
-  /// Loads deterministic close-price series for [start]~[end] (inclusive).
-  ///
-  /// Date correction policy is fixed:
-  /// - start date: adjusted to the first trading day on/after start.
-  /// - end date: adjusted to the last trading day on/before end.
-  Future<List<PricePoint>> loadSeries({
-    required String market,
-    required String ticker,
+  Future<List<PricePoint>> loadSeriesByAsset({
+    required AssetType assetType,
+    required String assetKey,
     required DateTime start,
     required DateTime end,
   }) async {
-    _validateMarket(market);
+    _validateAssetType(assetType);
     if (end.isBefore(start)) {
       throw ArgumentError('end must be greater than or equal to start');
     }
 
+    final String marketCode = assetType.code;
     final AssetManifest manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
     final Set<String> assetKeys = manifest.listAssets().toSet();
     final List<int> loadedYears = <int>[];
     final List<PricePoint> merged = <PricePoint>[];
 
     for (int year = start.year; year <= end.year; year++) {
-      final String assetPath = _assetIndex.flatYearAssetPath(market: market, ticker: ticker, year: year);
+      final String assetPath = _assetIndex.flatYearAssetPath(market: marketCode, ticker: assetKey, year: year);
       if (!assetKeys.contains(assetPath)) {
         debugPrint(
-          '[PriceRepository] missing yearly asset. market=$market, ticker=$ticker, year=$year, path=$assetPath',
+          '[PriceRepository] missing yearly asset. assetType=$assetType, assetKey=$assetKey, year=$year, path=$assetPath',
         );
         continue;
       }
@@ -129,12 +125,37 @@ class PriceRepository {
     }
 
     if (kDebugMode) {
-      debugPrint('[Simulation] market=$market, ticker=$ticker, start=${_formatYmd(start)}, end=${_formatYmd(end)}');
+      debugPrint(
+        '[Simulation] assetType=$assetType, assetKey=$assetKey, start=${_formatYmd(start)}, end=${_formatYmd(end)}',
+      );
       debugPrint('[Simulation] loadedYears=$loadedYears, filteredPoints=${filtered.length}');
     }
 
     return filtered;
   }
+
+  // Legacy wrappers kept to avoid touching existing screen flow in this step.
+  Future<List<String>> loadTop50Tickers(String market) =>
+      loadTop50TickersByAsset(_assetTypeFromMarket(market));
+
+  Future<Object?> loadYearData({required String market, required String ticker, required int year}) =>
+      loadYearDataByAsset(assetType: _assetTypeFromMarket(market), assetKey: ticker, year: year);
+
+  Future<List<int>> availableYears({required String market, required String ticker}) =>
+      availableYearsByAsset(assetType: _assetTypeFromMarket(market), assetKey: ticker);
+
+  Future<List<PricePoint>> loadSeries({
+    required String market,
+    required String ticker,
+    required DateTime start,
+    required DateTime end,
+  }) =>
+      loadSeriesByAsset(
+        assetType: _assetTypeFromMarket(market),
+        assetKey: ticker,
+        start: start,
+        end: end,
+      );
 
   PricePoint? _findStartOrAfter(List<PricePoint> merged, int targetYmd) {
     for (final PricePoint point in merged) {
@@ -166,9 +187,16 @@ class PriceRepository {
     throw FormatException('Unsupported meta format. assetPath=$metaPath, expected=List<Map>');
   }
 
-  void _validateMarket(String market) {
-    if (market != 'KR') {
-      throw ArgumentError.value(market, 'market', 'market must be KR');
+  AssetType _assetTypeFromMarket(String market) {
+    if (market == 'KR') {
+      return AssetType.stockKR;
+    }
+    throw ArgumentError.value(market, 'market', 'unsupported market for this step');
+  }
+
+  void _validateAssetType(AssetType assetType) {
+    if (assetType != AssetType.stockKR) {
+      throw ArgumentError.value(assetType, 'assetType', 'only stockKR is enabled in this step');
     }
   }
 
