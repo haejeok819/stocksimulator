@@ -224,12 +224,10 @@ class StockRepository {
           continue;
         }
 
-        final List<Map<String, dynamic>> typedMetaList =
-            (decodedObject.whereType<Map>().map((Map<Object?, Object?> e) => Map<String, dynamic>.from(e)).toList())
-                .asMap()
-                .entries
-                .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
-                .toList();
+        final List<Map<String, dynamic>> typedMetaList = decodedObject
+            .whereType<Map>()
+            .map((Map<Object?, Object?> row) => Map<String, dynamic>.from(row))
+            .toList();
 
         final List<StockModel> loaded;
         if (assetType == AssetType.stockKR) {
@@ -256,19 +254,12 @@ class StockRepository {
               .whereType<StockModel>()
               .toList();
 
-          debugPrint(
-            '[TopMeta] metaCount=${typedMetaList.length}, normalizedFirst3Keys=${normalized.take(3).map((StockModel e) => e.ticker).toList()}',
-          );
-          debugPrint("[TopMeta] indexKRCount=${krKeys.length}, contains000270=${krKeys.contains('000270')}");
-
           if (typedMetaList.isEmpty) {
             continue;
           }
 
           loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
 
-          debugPrint('[TopMeta] usingFallback=false');
-          debugPrint('[TopMeta] finalListCount=${loaded.length}');
         } else {
           loaded = typedMetaList
               .asMap()
@@ -307,15 +298,12 @@ class StockRepository {
             ),
           )
           .toList();
-      debugPrint('[TopMeta] usingFallback=true');
-      debugPrint('[TopMeta] finalListCount=${fallback.length}');
       _stockCache[cacheKey] = fallback;
       return fallback;
     }
 
     throw StateError('메타 파일이 없습니다');
   }
-
 
   String _resolveKrDisplayName(Map<String, dynamic> row, String code6) {
     final List<String> candidates = <String>[
