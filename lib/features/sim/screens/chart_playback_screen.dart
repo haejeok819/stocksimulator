@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:stocksimulator/app/theme/playback_design_tokens.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
@@ -31,16 +32,19 @@ class ChartPlaybackScreen extends StatefulWidget {
   State<ChartPlaybackScreen> createState() => _ChartPlaybackScreenState();
 }
 
-class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
+class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTickerProviderStateMixin {
   final HistoryRepository _historyRepository = HistoryRepository();
 
-  Timer? _ticker;
   Timer? _skipTimer;
+  late final Ticker _frameTicker;
   bool _resultShown = false;
   bool _showSkip = false;
 
   int _index = 0;
+  double _playbackPosition = 0;
+  double _renderPosition = 0;
   double _pulseTime = 0;
+  Duration? _lastFrameElapsed;
   bool _playing = true;
   double _speed = 1;
 
@@ -48,6 +52,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   void initState() {
     super.initState();
     _speed = 1;
+    _frameTicker = createTicker(_onFrameTick);
     AdService.instance.preloadInterstitial();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -63,8 +68,11 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _frameTicker.dispose();
     _skipTimer?.cancel();
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
     super.dispose();
   }
 
@@ -73,17 +81,15 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     return defaultTargetPlatform == TargetPlatform.windows;
   }
 
-  int get _playbackTickMs => _isWindowsDesktop ? 40 : 16;
-
-  int get _baseStepSize {
+  double get _basePointsPerSecond {
     final int totalDays = widget.points.length;
     if (totalDays <= 252) {
-      return _isWindowsDesktop ? 2 : 1;
+      return _isWindowsDesktop ? 0.70 : 0.92;
     }
     if (totalDays <= 1260) {
-      return _isWindowsDesktop ? 6 : 4;
+      return _isWindowsDesktop ? 2.0 : 2.6;
     }
-    return _isWindowsDesktop ? 18 : 12;
+    return _isWindowsDesktop ? 6.0 : 7.5;
   }
 
   void _startPlayback() {
@@ -92,43 +98,61 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
       return;
     }
 
-    _skipTimer = Timer(const Duration(seconds: 3), () {
+    _skipTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) {
         setState(() => _showSkip = true);
       }
     });
 
-    _ticker = Timer.periodic(Duration(milliseconds: _playbackTickMs), (_) {
-      if (!mounted || !_playing) return;
+    _playbackPosition = _index.toDouble();
+    _renderPosition = _playbackPosition;
+    _lastFrameElapsed = null;
+    if (!_frameTicker.isActive) {
+      _frameTicker.start();
+    }
+  }
 
-      final int maxIndex = widget.points.length - 1;
-      final int speedMultiplier = _speed.round().clamp(1, 8);
-      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 3).round().clamp(1, 240);
+  void _onFrameTick(Duration elapsed) {
+    if (!mounted || !_playing || widget.points.isEmpty) return;
 
-      int nextIndex = _index;
-      final double nextPulse = _pulseTime + 0.16;
-      if (AppSettings.chartMotionEnabled.value) {
-        nextIndex = min(_index + stepSize, maxIndex);
-      } else {
-        nextIndex = min(_index + max(1, speedMultiplier ~/ 2), maxIndex);
-      }
+    final Duration previous = _lastFrameElapsed ?? elapsed;
+    _lastFrameElapsed = elapsed;
+    final double dtSeconds = max(0, (elapsed - previous).inMicroseconds) / 1000000;
+    if (dtSeconds <= 0) return;
 
+    final int maxIndex = widget.points.length - 1;
+    final double velocity = _basePointsPerSecond * _speed;
+    final double nextPosition = (_playbackPosition + (velocity * dtSeconds)).clamp(0, maxIndex.toDouble());
+
+    _playbackPosition = nextPosition;
+    _renderPosition = _easedRenderPosition(nextPosition);
+    _pulseTime += dtSeconds * 5.0;
+
+    final int nextIndex = _playbackPosition.floor().clamp(0, maxIndex);
+    if (nextIndex != _index) {
       _index = nextIndex;
-      _pulseTime = nextPulse;
+    }
 
-      if (mounted) {
-        setState(() {});
-      }
+    setState(() {});
 
-      if (_index >= maxIndex) {
-        _ticker?.cancel();
-        _showResult();
-      }
-    });
+    if (_playbackPosition >= maxIndex) {
+      _playing = false;
+      _showResult();
+    }
+  }
+
+  double _easedRenderPosition(double position) {
+    final int base = position.floor();
+    final double frac = position - base;
+    if (_speed > 1 || frac <= 0) return position;
+
+    final double eased = Curves.easeInOutSine.transform(frac);
+    final double strength = ((1.0 - _speed) / 0.5).clamp(0, 1);
+    return base + (frac + ((eased - frac) * strength));
   }
 
   Future<void> _onSkipPressed() async {
-    _ticker?.cancel();
+    _playing = false;
 
     final InterstitialAd? ad = await AdHelper.loadInterstitial();
     if (ad == null) {
@@ -158,6 +182,9 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
     if (_resultShown) return;
     _resultShown = true;
     _skipTimer?.cancel();
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
 
     if (widget.points.isEmpty) {
       if (!mounted) return;
@@ -216,6 +243,16 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
   }
 
 
+
+  String _visiblePeriodText() {
+    if (widget.points.isEmpty) {
+      return '-';
+    }
+    final int safeIndex = _index.clamp(0, widget.points.length - 1);
+    final int start = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+    return '${_formatYmd(widget.points[start].ymd)} ~ ${_formatYmd(widget.points[safeIndex].ymd)}';
+  }
+
   String _formatPriceByMarket(double price, String marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
   }
@@ -271,6 +308,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                             return StockChartPlayer(
                               points: widget.points,
                               currentIndex: _index,
+                              playbackPosition: _renderPosition,
                               pulse: motionOn ? (sin(_pulseTime) + 1) / 2 : 0,
                               marketCode: marketCode,
                             );
@@ -287,23 +325,32 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
                 children: <Widget>[
                   _PlayButton(
                     playing: _playing,
-                    onPressed: () => setState(() => _playing = !_playing),
+                    onPressed: () => setState(() {
+                      _playing = !_playing;
+                      _lastFrameElapsed = null;
+                      if (_playing && !_frameTicker.isActive) {
+                        _frameTicker.start();
+                      } else if (!_playing && _frameTicker.isActive) {
+                        _frameTicker.stop();
+                      }
+                    }),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               SegmentedButton<double>(
                 segments: const <ButtonSegment<double>>[
+                  ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
                   ButtonSegment<double>(value: 1, label: Text('1x')),
                   ButtonSegment<double>(value: 2, label: Text('2x')),
                   ButtonSegment<double>(value: 4, label: Text('4x')),
                   ButtonSegment<double>(value: 8, label: Text('8x')),
                 ],
                 selected: <double>{_speed},
-                onSelectionChanged: (Set<double> value) => setState(() => _speed = value.first),
+                onSelectionChanged: (Set<double> value) => setState(() { _speed = value.first; _lastFrameElapsed = null; }),
               ),
               const SizedBox(height: 10),
-              Text('전체 기간 주가 차트', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+              Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
               if (_showSkip)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -334,12 +381,13 @@ class _SimGridPattern extends StatelessWidget {
 class _SimGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 36) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    final Paint vPaint = Paint()..color = Colors.white.withOpacity(0.012)..strokeWidth = 1;
+    final Paint hPaint = Paint()..color = Colors.white.withOpacity(0.022)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vPaint);
     }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    for (double y = 0; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
     }
   }
 
