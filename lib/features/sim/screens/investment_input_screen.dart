@@ -56,11 +56,16 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
     super.dispose();
   }
 
-  String _formatWon(int value) => '${AppNumberFormat.formatInt(value)}원';
+  String _formatWon(int value) => AppNumberFormat.formatKoreanSpokenWon(value);
 
   String _presetLabel(int value) => _formatWon(value);
 
-  String _approxKorean(int value) => '약 ${AppNumberFormat.formatInt(value)}원';
+  String _approxKorean(int value) => AppNumberFormat.formatApproxKoreanSpokenWon(value);
+
+  String _deltaLabel(int delta) {
+    final String sign = delta >= 0 ? '+' : '-';
+    return '$sign${AppNumberFormat.formatKoreanSpokenWon(delta.abs())}';
+  }
 
   void _onFineTuneTap(int delta) {
     ref.read(investmentAmountProvider.notifier).addAmount(delta);
@@ -198,12 +203,7 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: <int>[-100000, -10000, 10000, 100000].map((int delta) {
-                        final String label = switch (delta) {
-                          -100000 => '-100,000',
-                          -10000 => '-10,000',
-                          10000 => '+10,000',
-                          _ => '+100,000',
-                        };
+                        final String label = _deltaLabel(delta);
                         return Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 4),

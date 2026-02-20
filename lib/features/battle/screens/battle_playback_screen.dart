@@ -54,12 +54,6 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   }
 
 
-  String _visiblePeriodText(BattleSeriesData data, int playbackIndex) {
-    final int safe = playbackIndex.clamp(0, data.length - 1);
-    final int start = battleVisibleStartIndex(totalCount: data.length, currentIndex: safe);
-    return '${_formatYmd(data.normalized.dates[start])} ~ ${_formatYmd(data.normalized.dates[safe])}';
-  }
-
   Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
     if (_resultDialogShown || !mounted) return;
     _resultDialogShown = true;
@@ -208,45 +202,6 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                     ),
                   ),
                 ),
-              Positioned(
-                top: 14,
-                right: 16,
-                child: SafeArea(
-                  child: Builder(
-                    builder: (BuildContext context) {
-                      final double buttonWidth = (MediaQuery.sizeOf(context).width * 0.24).clamp(136.0, 220.0).toDouble();
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          boxShadow: const <BoxShadow>[
-                            BoxShadow(
-                              color: Color(0x735F8CFF),
-                              blurRadius: 10,
-                              spreadRadius: 0.6,
-                            ),
-                          ],
-                        ),
-                        child: SizedBox(
-                          width: buttonWidth,
-                          height: 40,
-                          child: OutlinedButton(
-                            onPressed: () => _onSkip(data, setup),
-                            style: OutlinedButton.styleFrom(
-                              backgroundColor: const Color(0xFF2F3E5F),
-                              foregroundColor: const Color(0xFFEAF0FF),
-                              side: const BorderSide(color: Color(0xC26E8BFF), width: 1),
-                              shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(horizontal: 24),
-                              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
-                            ),
-                            child: Text(_isMobileRuntime ? '스킵' : '결과 보기', textAlign: TextAlign.center),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
@@ -322,21 +277,32 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                         if (setup.safeMode) return child;
                         return FadeTransition(opacity: animation, child: SlideTransition(position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(animation), child: child));
                       },
-                      child: Column(
+                      child: Text(
+                        '📅 ${_formatYmd(tick.ymd)}',
                         key: ValueKey<int>(tick.ymd),
-                        children: <Widget>[
-                          Text('📅 ${_formatYmd(tick.ymd)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 2),
-                          Text('Day ${playback.index + 1} / ${data.length}', style: const TextStyle(fontSize: 13, color: Color(0xFFA1A1A8))),
-                          const SizedBox(height: 2),
-                          Text(
-                            '보이는 기간  ${_visiblePeriodText(data, playback.index)}',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
-                          ),
-                        ],
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                       ),
                     ),
                     const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 136, maxWidth: 210),
+                        child: OutlinedButton(
+                          onPressed: () => _onSkip(data, setup),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2F3E5F),
+                            foregroundColor: const Color(0xFFEAF0FF),
+                            side: const BorderSide(color: Color(0xC26E8BFF), width: 1),
+                            shape: const StadiumBorder(),
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                          ),
+                          child: const Text('결과 보기', textAlign: TextAlign.center),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: <Widget>[

@@ -527,7 +527,7 @@ class BattleAmountInput extends ConsumerWidget {
           children: <Widget>[
             const Text('투자금', style: TextStyle(fontSize: 14, color: Color(0xFFA1A1A8))),
             const SizedBox(height: 8),
-            Text(AppNumberFormat.formatMoney(setup.investAmount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(AppNumberFormat.formatKoreanSpokenWon(setup.investAmount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             Row(
               children: <Widget>[
@@ -566,7 +566,7 @@ class BattleAmountInput extends ConsumerWidget {
   }
 
   String _presetLabel(int amount) {
-    return AppNumberFormat.formatMoney(amount, symbol: '₩');
+    return AppNumberFormat.formatKoreanSpokenWon(amount);
   }
 }
 
