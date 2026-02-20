@@ -87,8 +87,8 @@ class _BattleChartState extends State<BattleChart> {
       targetMax = mid + minVisualRange / 2;
     }
 
-    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.18)!;
-    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.18)!;
+    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
+    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.16)!;
 
     return CustomPaint(
       size: Size.infinite,
@@ -146,18 +146,38 @@ class _BattleChartPainter extends CustomPainter {
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
 
     final Paint gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.18)
+      ..color = Colors.white.withOpacity(0.15)
       ..strokeWidth = 1;
-    const int yTickCount = 5;
+    const int yTickCount = 4;
+    final double currentMid = (seriesA[currentIndex] + seriesB[currentIndex]) / 2;
+    final List<double> tickValues = <double>[];
+    int nearestTick = 0;
+    double nearestDist = double.infinity;
+    for (int i = 0; i < yTickCount; i++) {
+      final double ratio = i / (yTickCount - 1);
+      final double value = maxY - ratio * (maxY - minY);
+      tickValues.add(value);
+      final double d = (value - currentMid).abs();
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestTick = i;
+      }
+    }
+
     for (int i = 0; i < yTickCount; i++) {
       final double ratio = i / (yTickCount - 1);
       final double y = chartRect.top + ratio * chartRect.height;
-      final double value = maxY - ratio * (maxY - minY);
+      final double value = tickValues[i];
       canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), gridPaint);
+      final bool isCurrentBand = i == nearestTick;
       final TextPainter tp = TextPainter(
         text: TextSpan(
           text: _formatAxisLabel(value),
-          style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 11),
+          style: TextStyle(
+            color: isCurrentBand ? const Color(0xFFD1D4E0) : const Color(0x99A1A1A8),
+            fontSize: 11,
+            fontWeight: isCurrentBand ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: yAxisWidth - 8);
@@ -174,15 +194,16 @@ class _BattleChartPainter extends CustomPainter {
       return Offset(x, y);
     }
 
+    final bool aLeading = seriesA[currentIndex] >= seriesB[currentIndex];
     final Paint aPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = const Color(0xFFE54B4B);
+      ..strokeWidth = aLeading ? 3.4 : 2.8
+      ..color = const Color(0xFFE54B4B).withOpacity(aLeading ? 1 : 0.84);
 
     final Paint bPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = const Color(0xFF266DD3);
+      ..strokeWidth = aLeading ? 2.8 : 3.4
+      ..color = const Color(0xFF266DD3).withOpacity(aLeading ? 0.84 : 1);
 
     final Path aPath = Path();
     final Path bPath = Path();
@@ -204,33 +225,39 @@ class _BattleChartPainter extends CustomPainter {
 
     final Offset endA = pointFor(currentIndex, seriesA[currentIndex]);
     final Offset endB = pointFor(currentIndex, seriesB[currentIndex]);
-    canvas.drawCircle(endA, 4, Paint()..color = const Color(0xFFE54B4B));
-    canvas.drawCircle(endB, 4, Paint()..color = const Color(0xFF266DD3));
+    canvas.drawCircle(endA, 9, Paint()..color = const Color(0xFFE54B4B).withOpacity(0.22));
+    canvas.drawCircle(endB, 9, Paint()..color = const Color(0xFF266DD3).withOpacity(0.22));
+    canvas.drawCircle(endA, 4.4, Paint()..color = const Color(0xFFE54B4B));
+    canvas.drawCircle(endB, 4.4, Paint()..color = const Color(0xFF266DD3));
 
     _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
   }
 
   void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
     final int visibleCount = endIndex - startIndex + 1;
-    final int labelCount = min(7, max(2, visibleCount));
-    final Set<int> indices = <int>{startIndex, endIndex};
-    for (int i = 1; i < labelCount - 1; i++) {
-      final int index = startIndex + ((visibleCount - 1) * (i / (labelCount - 1))).round();
-      indices.add(index.clamp(startIndex, endIndex));
+    final List<int> indices = <int>[startIndex];
+    if (visibleCount >= 36) {
+      indices.add(startIndex + ((visibleCount - 1) * 0.55).round());
     }
+    indices.add(endIndex);
 
-    for (final int index in indices.toList()..sort()) {
+    double lastRight = -1e9;
+    for (final int index in indices.toSet().toList()..sort()) {
       final double x = chartRect.left + (index - startIndex) * stepX;
-      final String label = _formatYmd(dates[index]);
+      final String label = index == endIndex ? _formatYmd(dates[index]) : _formatYmdShort(dates[index]);
       final TextPainter tp = TextPainter(
         text: TextSpan(
           text: label,
-          style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 10),
+          style: const TextStyle(color: Color(0x99A1A1A8), fontSize: 10),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
       final double drawX = (x - tp.width / 2).clamp(chartRect.left, chartRect.right - tp.width);
+      if (drawX < lastRight + 14) {
+        continue;
+      }
       tp.paint(canvas, Offset(drawX, chartRect.bottom + 6));
+      lastRight = drawX + tp.width;
     }
   }
 
@@ -247,6 +274,11 @@ class _BattleChartPainter extends CustomPainter {
   String _formatYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
+  }
+
+  String _formatYmdShort(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
   }
 
   @override

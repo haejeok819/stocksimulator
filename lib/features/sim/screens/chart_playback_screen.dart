@@ -103,7 +103,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> {
 
       final int maxIndex = widget.points.length - 1;
       final int speedMultiplier = _speed.round().clamp(1, 8);
-      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 6).round().clamp(1, 240);
+      final int stepSize = (((_baseStepSize * speedMultiplier) * 2) / 24).round().clamp(1, 240);
 
       int nextIndex = _index;
       final double nextPulse = _pulseTime + 0.16;
@@ -344,12 +344,13 @@ class _SimGridPattern extends StatelessWidget {
 class _SimGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = Colors.white.withOpacity(0.04)..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 36) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    final Paint vPaint = Paint()..color = Colors.white.withOpacity(0.012)..strokeWidth = 1;
+    final Paint hPaint = Paint()..color = Colors.white.withOpacity(0.022)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vPaint);
     }
-    for (double y = 0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    for (double y = 0; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
     }
   }
 

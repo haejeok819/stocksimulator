@@ -91,8 +91,8 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     final double targetMin = minY - pad;
     final double targetMax = maxY + pad;
 
-    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.18)!;
-    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.18)!;
+    _smoothedMinY = _smoothedMinY == null ? targetMin : ui.lerpDouble(_smoothedMinY, targetMin, 0.16)!;
+    _smoothedMaxY = _smoothedMaxY == null ? targetMax : ui.lerpDouble(_smoothedMaxY, targetMax, 0.16)!;
 
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
@@ -146,19 +146,37 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     const double xAxisHeight = 24;
     final Rect chartRect = Rect.fromLTWH(0, 0, size.width - yAxisWidth, size.height - xAxisHeight);
 
-    final Paint axisPaint = Paint()..color = AppColors.helperText.withOpacity(0.3);
-    const int yTickCount = 5;
+    final Paint axisPaint = Paint()..color = AppColors.helperText.withOpacity(0.18);
+    const int yTickCount = 4;
+    final double currentPercent = allPercents[currentIndex];
+    double nearestTickDist = double.infinity;
+    int nearestTick = 0;
+    final List<double> tickValues = <double>[];
+    for (int i = 0; i < yTickCount; i++) {
+      final double ratio = i / (yTickCount - 1);
+      tickValues.add(maxY - ratio * (maxY - minY));
+      final double d = (tickValues.last - currentPercent).abs();
+      if (d < nearestTickDist) {
+        nearestTickDist = d;
+        nearestTick = i;
+      }
+    }
+
     for (int i = 0; i < yTickCount; i++) {
       final double ratio = i / (yTickCount - 1);
       final double y = chartRect.top + ratio * chartRect.height;
-      final double value = maxY - ratio * (maxY - minY);
-
+      final double value = tickValues[i];
       canvas.drawLine(Offset(chartRect.left, y), Offset(chartRect.right, y), axisPaint);
 
+      final bool isCurrentBand = i == nearestTick;
       final TextPainter tp = TextPainter(
         text: TextSpan(
           text: _formatPriceLabel(value),
-          style: const TextStyle(color: AppColors.helperText, fontSize: 11),
+          style: TextStyle(
+            color: isCurrentBand ? AppColors.helperText.withOpacity(0.92) : AppColors.helperText.withOpacity(0.60),
+            fontSize: 11,
+            fontWeight: isCurrentBand ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
         textDirection: TextDirection.ltr,
       )..layout(maxWidth: yAxisWidth - 8);
@@ -178,13 +196,13 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     }
 
     final Paint upPaint = Paint()
-      ..color = AppColors.upSegment
-      ..strokeWidth = 2.8
+      ..color = AppColors.upSegment.withOpacity(0.84)
+      ..strokeWidth = 2.7
       ..style = PaintingStyle.stroke;
 
     final Paint downPaint = Paint()
-      ..color = AppColors.downSegment
-      ..strokeWidth = 2.8
+      ..color = AppColors.downSegment.withOpacity(0.84)
+      ..strokeWidth = 2.7
       ..style = PaintingStyle.stroke;
 
     for (int i = visibleStartIndex; i < currentIndex; i++) {
@@ -194,35 +212,44 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     }
 
     final Offset currentPoint = pointAt(currentIndex);
-    final double glowRadius = 6 + 6 * pulse;
-    canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.22));
-    canvas.drawCircle(currentPoint, 4 + 2 * pulse, Paint()..color = Colors.white);
+    final double glowRadius = 8 + 7 * pulse;
+    canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
+    canvas.drawCircle(currentPoint, 4.8 + 2.4 * pulse, Paint()..color = Colors.white);
 
     _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
   }
 
   void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
     final int visibleCount = endIndex - startIndex + 1;
-    final int labelCount = min(7, max(2, visibleCount));
-    final Set<int> indices = <int>{startIndex, endIndex};
-    for (int i = 1; i < labelCount - 1; i++) {
-      final int index = startIndex + ((visibleCount - 1) * (i / (labelCount - 1))).round();
-      indices.add(index.clamp(startIndex, endIndex));
+    final List<int> indices = <int>[startIndex];
+    if (visibleCount >= 36) {
+      indices.add(startIndex + ((visibleCount - 1) * 0.55).round());
     }
+    indices.add(endIndex);
 
-    for (final int index in indices.toList()..sort()) {
+    double lastRight = -1e9;
+    for (final int index in indices.toSet().toList()..sort()) {
       final double x = chartRect.left + (index - startIndex) * stepX;
-      final String label = _formatCompactYmd(points[index].ymd);
+      final String label = index == endIndex ? _formatFocusYmd(points[index].ymd) : _formatCompactYmd(points[index].ymd);
       final TextPainter tp = TextPainter(
-        text: TextSpan(text: label, style: const TextStyle(color: AppColors.helperText, fontSize: 10)),
+        text: TextSpan(text: label, style: TextStyle(color: AppColors.helperText.withOpacity(0.68), fontSize: 10)),
         textDirection: TextDirection.ltr,
       )..layout();
       final double drawX = (x - tp.width / 2).clamp(chartRect.left, chartRect.right - tp.width);
+      if (drawX < lastRight + 14) {
+        continue;
+      }
       tp.paint(canvas, Offset(drawX, chartRect.bottom + 6));
+      lastRight = drawX + tp.width;
     }
   }
 
   String _formatCompactYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
+  }
+
+  String _formatFocusYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(2, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
