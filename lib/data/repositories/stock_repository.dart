@@ -256,7 +256,31 @@ class StockRepository {
           );
           debugPrint("[TopMeta] indexKRCount=${krKeys.length}, contains000270=${krKeys.contains('000270')}");
 
-          loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+          final bool usingFallback = typedMetaList.isEmpty;
+          if (usingFallback) {
+            final List<String> sortedKrKeys = krKeys.toList()..sort();
+            loaded = sortedKrKeys
+                .asMap()
+                .entries
+                .map(
+                  (MapEntry<int, String> entry) => StockModel.fromJson(
+                    <String, dynamic>{
+                      'code6': entry.value,
+                      'ticker': entry.value,
+                      'name_ko': entry.value,
+                      'name_en': entry.value,
+                    },
+                    rank: entry.key + 1,
+                    assetType: assetType,
+                  ),
+                )
+                .toList();
+          } else {
+            loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+          }
+
+          debugPrint('[TopMeta] usingFallback=$usingFallback');
+          debugPrint('[TopMeta] finalListCount=${loaded.length}');
         } else {
           loaded = typedMetaList
               .asMap()
@@ -274,6 +298,31 @@ class StockRepository {
       } catch (error) {
         debugPrint('Top meta load failed: $path ($error)');
       }
+    }
+
+    if (assetType == AssetType.stockKR) {
+      final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
+      final List<String> sortedKrKeys = (typedIndex[AssetType.stockKR]?.keys.toList() ?? <String>[])..sort();
+      final List<StockModel> fallback = sortedKrKeys
+          .asMap()
+          .entries
+          .map(
+            (MapEntry<int, String> entry) => StockModel.fromJson(
+              <String, dynamic>{
+                'code6': entry.value,
+                'ticker': entry.value,
+                'name_ko': entry.value,
+                'name_en': entry.value,
+              },
+              rank: entry.key + 1,
+              assetType: assetType,
+            ),
+          )
+          .toList();
+      debugPrint('[TopMeta] usingFallback=true');
+      debugPrint('[TopMeta] finalListCount=${fallback.length}');
+      _stockCache[cacheKey] = fallback;
+      return fallback;
     }
 
     throw StateError('메타 파일이 없습니다');
