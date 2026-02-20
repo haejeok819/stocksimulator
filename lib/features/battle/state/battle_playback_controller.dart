@@ -117,7 +117,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     state = state.copyWith(index: end, status: BattlePlaybackStatus.ended, showCountdown: false, countdown: 0);
   }
 
-  int _playbackTickMs() => _safeMode ? 42 : 32;
+  int _playbackTickMs() => _safeMode ? 336 : 256;
 
   int _baseStepSize(int length) {
     if (length <= 252) {
@@ -134,7 +134,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
     if (data == null || data.length <= 1) return;
 
     final int speedMultiplier = state.speed.round().clamp(1, 8);
-    final int step = (_baseStepSize(data.length) * speedMultiplier).clamp(1, 240);
+    final int step = ((_baseStepSize(data.length) * speedMultiplier) / 8).round().clamp(1, 240);
 
     state = state.copyWith(status: BattlePlaybackStatus.running, showCountdown: false);
     _playbackTimer?.cancel();
