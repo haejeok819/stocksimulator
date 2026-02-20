@@ -7,6 +7,7 @@ import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/battle/screens/battle_playback_screen.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleSetupScreen extends ConsumerStatefulWidget {
@@ -217,7 +218,24 @@ class _BattleTickerCardState extends ConsumerState<BattleTickerCard> {
                       child: FutureBuilder<List<StockModel>>(
                         future: ref.read(battleStockRepositoryProvider).getTopStocks(market: selectedMarket, query: query),
                         builder: (BuildContext context, AsyncSnapshot<List<StockModel>> snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                child: Text(toUserMessage(snapshot.error!), textAlign: TextAlign.center),
+                              ),
+                            );
+                          }
+
                           final List<StockModel> stocks = snapshot.data ?? <StockModel>[];
+                          if (stocks.isEmpty) {
+                            return const Center(child: Text('조건에 맞는 종목이 없습니다.'));
+                          }
+
                           return ListView.builder(
                             itemCount: stocks.length,
                             itemBuilder: (BuildContext context, int index) {

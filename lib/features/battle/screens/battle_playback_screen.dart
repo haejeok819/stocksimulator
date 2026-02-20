@@ -10,6 +10,7 @@ import 'package:stocksimulator/features/battle/state/battle_playback_controller.
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattlePlaybackScreen extends ConsumerStatefulWidget {
@@ -323,7 +324,12 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
           );
         },
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object e, StackTrace s) => Center(child: Text(e.toString())),
+          error: (Object e, StackTrace s) => Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(toUserMessage(e), textAlign: TextAlign.center),
+            ),
+          ),
         ),
       ),
     );
