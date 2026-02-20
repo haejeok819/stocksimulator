@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:stocksimulator/data/assets/asset_index_generator.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
+import 'package:stocksimulator/shared/utils/asset_paths.dart';
 
 class PriceRepository {
   PriceRepository({AssetIndexGenerator? assetIndex}) : _assetIndex = assetIndex ?? const AssetIndexGenerator();
@@ -12,17 +13,24 @@ class PriceRepository {
 
   Future<List<String>> loadTop50TickersByAsset(AssetType assetType) async {
     _validateAssetType(assetType);
-    final String marketCode = assetType.code;
-    final String metaPath = 'assets/prices/${marketCode}_top50_meta.json';
+    final List<String> candidates = AssetPaths.assetPathMetaListCandidatesByAsset(assetType);
 
-    final Object? decoded = await _assetIndex.loadJsonAsset(metaPath);
-    final List<Map<String, Object?>> rows = _extractMetaRows(decoded, metaPath);
+    for (final String metaPath in candidates) {
+      try {
+        final Object? decoded = await _assetIndex.loadJsonAsset(metaPath);
+        final List<Map<String, Object?>> rows = _extractMetaRows(decoded, metaPath);
 
-    return rows
-        .map((Map<String, Object?> row) => row['ticker'])
-        .whereType<String>()
-        .where((String ticker) => ticker.trim().isNotEmpty)
-        .toList();
+        return rows
+            .map((Map<String, Object?> row) => row['ticker'])
+            .whereType<String>()
+            .where((String ticker) => ticker.trim().isNotEmpty)
+            .toList();
+      } catch (_) {
+        continue;
+      }
+    }
+
+    throw StateError('메타 파일이 없습니다');
   }
 
   Future<Object?> loadYearDataByAsset({

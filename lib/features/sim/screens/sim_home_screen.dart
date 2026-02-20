@@ -7,6 +7,7 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/date_range_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class SimHomeScreen extends StatefulWidget {
@@ -23,8 +24,8 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
   final ScrollController _stockListScrollController = ScrollController();
 
   static const List<String> _placeholders = <String>[
-    '삼성 vs 애플, 뭐가 더 올랐을까?',
-    '테슬라 vs 엔비디아?',
+    '삼성 vs 현대차, 뭐가 더 올랐을까?',
+    '코스피 대형주, 어디가 더 강했을까?',
     '코스피 5000의 주인공 삼성의 상승세는?',
     '10년동안 묵혀뒀다면 얼마를 벌었을까?',
     '코로나 때 샀더라면?',
@@ -157,9 +158,21 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
                         return const Center(child: CircularProgressIndicator());
                       }
 
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            toUserMessage(snapshot.error!),
+                            style: const TextStyle(color: Color(0xFFA1A1A8)),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+
                       final List<StockModel> stocks = _applyFilterAndSearch(snapshot.data ?? <StockModel>[]);
                       if (stocks.isEmpty) {
-                        return const Center(child: Text('데이터 없음', style: TextStyle(color: Color(0xFFA1A1A8))));
+                        return const Center(
+                          child: Text('표시할 자산이 없습니다.', style: TextStyle(color: Color(0xFFA1A1A8))),
+                        );
                       }
 
                       return ListView.separated(
