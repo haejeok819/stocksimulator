@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:stocksimulator/data/assets/asset_index_generator.dart';
 import 'package:stocksimulator/data/models/price_year_data.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
@@ -12,6 +13,7 @@ class StockRepository {
   StockRepository({PriceRepository? priceRepository}) : _priceRepository = priceRepository ?? PriceRepository();
 
   final PriceRepository _priceRepository;
+  final AssetIndexGenerator _assetIndex = const AssetIndexGenerator();
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
 
@@ -229,15 +231,43 @@ class StockRepository {
                 .map((MapEntry<int, Map<String, dynamic>> entry) => entry.value)
                 .toList();
 
-        final List<StockModel> loaded = typedMetaList
-            .asMap()
-            .entries
-            .map(
-              (MapEntry<int, Map<String, dynamic>> entry) =>
-                  StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
-            )
-            .where((StockModel stock) => stock.ticker.isNotEmpty)
-            .toList();
+        final List<StockModel> loaded;
+        if (assetType == AssetType.stockKR) {
+          final Map<AssetType, Map<String, List<int>>> typedIndex = await _assetIndex.buildAssetTypeIndex();
+          final Set<String> krKeys = typedIndex[AssetType.stockKR]?.keys.toSet() ?? <String>{};
+
+          final List<StockModel> normalized = typedMetaList
+              .asMap()
+              .entries
+              .map((MapEntry<int, Map<String, dynamic>> entry) {
+                final String? code6 = _normalizeKrCode6(entry.value);
+                if (code6 == null) {
+                  return null;
+                }
+                final Map<String, dynamic> normalizedJson = Map<String, dynamic>.from(entry.value);
+                normalizedJson['ticker'] = code6;
+                return StockModel.fromJson(normalizedJson, rank: entry.key + 1, assetType: assetType);
+              })
+              .whereType<StockModel>()
+              .toList();
+
+          debugPrint(
+            '[TopMeta] metaCount=${typedMetaList.length}, normalizedFirst3Keys=${normalized.take(3).map((StockModel e) => e.ticker).toList()}',
+          );
+          debugPrint("[TopMeta] indexKRCount=${krKeys.length}, contains000270=${krKeys.contains('000270')}");
+
+          loaded = normalized.where((StockModel stock) => krKeys.contains(stock.ticker)).toList();
+        } else {
+          loaded = typedMetaList
+              .asMap()
+              .entries
+              .map(
+                (MapEntry<int, Map<String, dynamic>> entry) =>
+                    StockModel.fromJson(entry.value, rank: entry.key + 1, assetType: assetType),
+              )
+              .where((StockModel stock) => stock.ticker.isNotEmpty)
+              .toList();
+        }
 
         _stockCache[cacheKey] = loaded;
         return loaded;
@@ -248,4 +278,23 @@ class StockRepository {
 
     throw StateError('메타 파일이 없습니다');
   }
+
+  String? _normalizeKrCode6(Map<String, dynamic> row) {
+    final String code6 = (row['code6'] as String? ?? '').trim();
+    if (RegExp(r'^\d{6}$').hasMatch(code6)) {
+      return code6;
+    }
+
+    final String ticker = (row['ticker'] as String? ?? '').trim();
+    if (ticker.contains('.')) {
+      final String left = ticker.split('.').first.trim();
+      if (RegExp(r'^\d{6}$').hasMatch(left)) {
+        return left;
+      }
+    }
+
+    final RegExpMatch? match = RegExp(r'(\d{6})').firstMatch(ticker);
+    return match?.group(1);
+  }
+
 }
