@@ -43,7 +43,7 @@ class _DcaAmountScreenState extends State<DcaAmountScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(AppNumberFormat.formatMoney(_amount), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
+            Text(AppNumberFormat.formatKoreanSpokenWon(_amount), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             const Text('선택한 주기마다 같은 금액으로 자동 매수돼요.', style: TextStyle(color: Color(0xFFA1A1A8))),
             const SizedBox(height: 14),
@@ -53,7 +53,7 @@ class _DcaAmountScreenState extends State<DcaAmountScreen> {
               children: _presets
                   .map(
                     (int amount) => ChoiceChip(
-                      label: Text(AppNumberFormat.formatMoney(amount, symbol: '₩')),
+                      label: Text(AppNumberFormat.formatKoreanSpokenWon(amount)),
                       selected: _amount == amount,
                       onSelected: (_) => setState(() => _amount = amount),
                     ),
@@ -66,14 +66,14 @@ class _DcaAmountScreenState extends State<DcaAmountScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => setState(() => _amount = (_amount - 10000).clamp(100, 100000000)),
-                    child: const Text('- 10,000'),
+                    child: const Text('- 만원'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => setState(() => _amount = (_amount + 10000).clamp(100, 100000000)),
-                    child: const Text('+ 10,000'),
+                    child: const Text('+ 만원'),
                   ),
                 ),
               ],
@@ -87,7 +87,7 @@ class _DcaAmountScreenState extends State<DcaAmountScreen> {
                   children: <Widget>[
                     Text('회차 수: ${widget.eventCount}회'),
                     const SizedBox(height: 6),
-                    Text('총 투자금: ${AppNumberFormat.formatMoney(total)}'),
+                    Text('총 투자금: ${AppNumberFormat.formatKoreanSpokenWon(total)}'),
                   ],
                 ),
               ),

@@ -34,6 +34,17 @@ class AdService {
     );
   }
 
+
+  Future<InterstitialAd?> takeOrLoadInterstitial() async {
+    final InterstitialAd? cached = _interstitial;
+    if (cached != null) {
+      _interstitial = null;
+      return cached;
+    }
+
+    return AdHelper.loadInterstitial();
+  }
+
   Future<void> showOnClose({required VoidCallback onDone}) async {
     final InterstitialAd? ad = _interstitial;
     if (ad == null) {
