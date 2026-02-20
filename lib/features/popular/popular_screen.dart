@@ -3,6 +3,7 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/date_range_screen.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/shared/utils/error_message.dart';
 import 'package:stocksimulator/shared/utils/slide_route.dart';
 
 class PopularScreen extends StatefulWidget {
@@ -44,9 +45,18 @@ class _PopularScreenState extends State<PopularScreen> {
                     return const Center(child: CircularProgressIndicator());
                   }
 
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        toUserMessage(snapshot.error!),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
                   final List<StockModel> stocks = snapshot.data ?? <StockModel>[];
                   if (stocks.isEmpty) {
-                    return const Center(child: Text('데이터 없음'));
+                    return const Center(child: Text('표시할 종목이 없습니다.'));
                   }
 
                   return ListView.separated(
