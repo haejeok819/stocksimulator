@@ -16,15 +16,32 @@ NormalizedBattleSeries normalizeBattleSeries({
   required List<PricePoint> aSeries,
   required List<PricePoint> bSeries,
 }) {
+  if (aSeries.isEmpty || bSeries.isEmpty) {
+    return const NormalizedBattleSeries(dates: <int>[], closeA: <double>[], closeB: <double>[]);
+  }
+
   final Map<int, double> mapA = <int, double>{for (final PricePoint p in aSeries) p.ymd: p.close};
   final Map<int, double> mapB = <int, double>{for (final PricePoint p in bSeries) p.ymd: p.close};
 
-  final List<int> dates = mapA.keys.where((int ymd) => mapB.containsKey(ymd)).toList()..sort();
+  final List<int> dates = mapA.keys.where((int ymd) => mapB.containsKey(ymd)).toList(growable: false)..sort();
+  if (dates.isEmpty) {
+    return const NormalizedBattleSeries(dates: <int>[], closeA: <double>[], closeB: <double>[]);
+  }
 
-  final List<double> closeA = dates.map((int ymd) => mapA[ymd]!).toList(growable: false);
-  final List<double> closeB = dates.map((int ymd) => mapB[ymd]!).toList(growable: false);
+  final List<double> closeA = List<double>.filled(dates.length, 0, growable: false);
+  final List<double> closeB = List<double>.filled(dates.length, 0, growable: false);
 
-  return NormalizedBattleSeries(dates: dates, closeA: closeA, closeB: closeB);
+  for (int i = 0; i < dates.length; i++) {
+    final int ymd = dates[i];
+    closeA[i] = mapA[ymd]!;
+    closeB[i] = mapB[ymd]!;
+  }
+
+  return NormalizedBattleSeries(
+    dates: dates,
+    closeA: List<double>.unmodifiable(closeA),
+    closeB: List<double>.unmodifiable(closeB),
+  );
 }
 
 NormalizedBattleSeries snapNormalizedSeriesToNearestRange({

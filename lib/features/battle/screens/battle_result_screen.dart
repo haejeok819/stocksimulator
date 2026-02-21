@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/shared/share/services/share_service.dart';
+import 'package:stocksimulator/shared/share/share_payload.dart';
+import 'package:stocksimulator/shared/share/widgets/share_card.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
 class BattleResultScreen extends ConsumerWidget {
@@ -19,7 +23,15 @@ class BattleResultScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Battle Result')),
+      appBar: AppBar(
+        title: const Text('Battle Result'),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () => _openShareBottomSheet(context: context, setup: setup, result: result),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -60,6 +72,80 @@ class BattleResultScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _openShareBottomSheet({
+    required BuildContext context,
+    required BattleSetupState setup,
+    required BattleResultState result,
+  }) async {
+    final GlobalKey boundaryKey = GlobalKey();
+    final ShareService shareService = const ShareService();
+    final DateFormat formatter = DateFormat('yyyy.MM.dd');
+
+    final BattleSharePayload payload = BattleSharePayload(
+      aTitle: _koreanName(setup.stockA),
+      aReturnText: AppNumberFormat.formatPercent(result.finalReturnA),
+      bTitle: _koreanName(setup.stockB),
+      bReturnText: AppNumberFormat.formatPercent(result.finalReturnB),
+      periodText: '${formatter.format(setup.startDate)} ~ ${formatter.format(setup.endDate)}',
+      winnerText: '${result.winner} 승리',
+      badgeText: 'BATTLE 결과',
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B22),
+      builder: (BuildContext sheetContext) {
+        bool isSharing = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            Future<void> onSharePressed() async {
+              setModalState(() {
+                isSharing = true;
+              });
+              try {
+                await shareService.shareBattleCard(boundaryKey, payload);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')));
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() {
+                    isSharing = false;
+                  });
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    BattleShareCard(boundaryKey: boundaryKey, payload: payload),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSharing ? null : onSharePressed,
+                        icon: isSharing
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.share),
+                        label: const Text('공유하기'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
