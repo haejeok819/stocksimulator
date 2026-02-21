@@ -12,35 +12,51 @@ class NormalizedBattleSeries {
   final List<double> closeB;
 }
 
+const NormalizedBattleSeries _emptyNormalizedBattleSeries =
+    NormalizedBattleSeries(dates: <int>[], closeA: <double>[], closeB: <double>[]);
+
 NormalizedBattleSeries normalizeBattleSeries({
   required List<PricePoint> aSeries,
   required List<PricePoint> bSeries,
 }) {
   if (aSeries.isEmpty || bSeries.isEmpty) {
-    return const NormalizedBattleSeries(dates: <int>[], closeA: <double>[], closeB: <double>[]);
+    return _emptyNormalizedBattleSeries;
   }
 
-  final Map<int, double> mapA = <int, double>{for (final PricePoint p in aSeries) p.ymd: p.close};
-  final Map<int, double> mapB = <int, double>{for (final PricePoint p in bSeries) p.ymd: p.close};
+  final List<PricePoint> sortedA = List<PricePoint>.from(aSeries)..sort((PricePoint l, PricePoint r) => l.ymd.compareTo(r.ymd));
+  final List<PricePoint> sortedB = List<PricePoint>.from(bSeries)..sort((PricePoint l, PricePoint r) => l.ymd.compareTo(r.ymd));
 
-  final List<int> dates = mapA.keys.where((int ymd) => mapB.containsKey(ymd)).toList(growable: false)..sort();
-  if (dates.isEmpty) {
-    return const NormalizedBattleSeries(dates: <int>[], closeA: <double>[], closeB: <double>[]);
-  }
-
+  final List<int> dates = <int>[];
   final List<double> closeA = <double>[];
   final List<double> closeB = <double>[];
-  closeA.length = dates.length;
-  closeB.length = dates.length;
+  int i = 0;
+  int j = 0;
+  while (i < sortedA.length && j < sortedB.length) {
+    final PricePoint pointA = sortedA[i];
+    final PricePoint pointB = sortedB[j];
 
-  for (int i = 0; i < dates.length; i++) {
-    final int ymd = dates[i];
-    closeA[i] = mapA[ymd]!;
-    closeB[i] = mapB[ymd]!;
+    if (pointA.ymd == pointB.ymd) {
+      dates.add(pointA.ymd);
+      closeA.add(pointA.close);
+      closeB.add(pointB.close);
+      i += 1;
+      j += 1;
+      continue;
+    }
+
+    if (pointA.ymd < pointB.ymd) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+
+  if (dates.isEmpty) {
+    return _emptyNormalizedBattleSeries;
   }
 
   return NormalizedBattleSeries(
-    dates: dates,
+    dates: List<int>.unmodifiable(dates),
     closeA: List<double>.unmodifiable(closeA),
     closeB: List<double>.unmodifiable(closeB),
   );
@@ -65,7 +81,11 @@ NormalizedBattleSeries snapNormalizedSeriesToNearestRange({
   final List<double> closeA = normalized.closeA.sublist(from, exclusiveEnd);
   final List<double> closeB = normalized.closeB.sublist(from, exclusiveEnd);
 
-  return NormalizedBattleSeries(dates: dates, closeA: closeA, closeB: closeB);
+  return NormalizedBattleSeries(
+    dates: List<int>.unmodifiable(dates),
+    closeA: List<double>.unmodifiable(closeA),
+    closeB: List<double>.unmodifiable(closeB),
+  );
 }
 
 int _nearestYmdIndex(List<int> sortedDates, int target) {
