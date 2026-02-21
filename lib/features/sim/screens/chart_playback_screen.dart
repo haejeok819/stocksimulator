@@ -12,6 +12,9 @@ import 'package:stocksimulator/data/repositories/history_repository.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
+import 'package:stocksimulator/shared/share/services/share_service.dart';
+import 'package:stocksimulator/shared/share/share_payload.dart';
+import 'package:stocksimulator/shared/share/widgets/share_card.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
@@ -117,6 +120,10 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
   Future<bool> _showRewardedAdFor8xUnlock() async {
+    if (AdService.instance.adsRemoved) {
+      return true;
+    }
+
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (!mounted || ad == null) {
       return false;
@@ -224,119 +231,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
 
-  void _on8xUnlockChanged() {
-    _schedule8xUnlockExpiryCheck();
-    if (!mounted) return;
-    setState(() {
-      if (!AppSettings.is8xSpeedUnlocked && _speed == 8) {
-        _speed = 4;
-      }
-    });
-  }
-
-  void _schedule8xUnlockExpiryCheck() {
-    _speedUnlockTimer?.cancel();
-    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
-    if (unlockUntil == null) {
-      return;
-    }
-
-    final Duration remaining = unlockUntil.difference(DateTime.now());
-    if (remaining <= Duration.zero) {
-      if (AppSettings.speed8xUnlockedUntil.value != null) {
-        AppSettings.speed8xUnlockedUntil.value = null;
-      }
-      return;
-    }
-
-    _speedUnlockTimer = Timer(remaining, () {
-      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
-        AppSettings.speed8xUnlockedUntil.value = null;
-      }
-    });
-  }
-
-  Future<bool> _showRewardedAdFor8xUnlock() async {
-    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
-    if (!mounted || ad == null) {
-      return false;
-    }
-
-    final Completer<bool> completer = Completer<bool>();
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (InterstitialAd ad) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(true);
-      },
-      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(false);
-      },
-    );
-
-    try {
-      ad.show();
-    } catch (_) {
-      ad.dispose();
-      if (!completer.isCompleted) completer.complete(false);
-    }
-
-    final bool watched = await completer.future;
-    AdService.instance.preloadInterstitial();
-    return watched;
-  }
-
-  Future<void> _onSpeedSelected(double selectedSpeed) async {
-    if (selectedSpeed != 8) {
-      if (!mounted) return;
-      setState(() {
-        _speed = selectedSpeed;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    if (AppSettings.is8xSpeedUnlocked) {
-      if (!mounted) return;
-      setState(() {
-        _speed = 8;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    final bool? shouldWatchAd = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('8x 스피드 잠금'),
-          content: const Text('광고를 보고나서 8x 스피드를 할 수 있어요.\n5분 동안은 광고가 뜨지 않아요.'),
-          actions: <Widget>[
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
-          ],
-        );
-      },
-    );
-
-    if (shouldWatchAd != true || !mounted) return;
-
-    final bool unlocked = await _showRewardedAdFor8xUnlock();
-    if (!mounted) return;
-
-    if (unlocked) {
-      AppSettings.unlock8xSpeedFor(_unlockDuration);
-      setState(() {
-        _speed = 8;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
-    );
-  }
 
   bool get _isWindowsDesktop {
     if (kIsWeb) return false;
@@ -420,6 +314,11 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
       _frameTicker.stop();
     }
 
+    if (AdService.instance.adsRemoved) {
+      _showResult();
+      return;
+    }
+
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (ad == null) {
       _showResult();
@@ -490,6 +389,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
       barrierDismissible: true,
       builder: (BuildContext context) {
         return _ResultDialog(
+          title: widget.flowState.selectedStock?.displayName ?? '시뮬레이션 결과',
+          periodText: '${_formatYmd(widget.points.first.ymd)} ~ ${_formatYmd(widget.points.last.ymd)}',
           initialAmount: investedAmount,
           finalAmount: finalAmount,
           profit: profit,
@@ -742,6 +643,8 @@ class _PlayButton extends StatelessWidget {
 
 class _ResultDialog extends StatefulWidget {
   const _ResultDialog({
+    required this.title,
+    required this.periodText,
     required this.initialAmount,
     required this.finalAmount,
     required this.profit,
@@ -750,6 +653,8 @@ class _ResultDialog extends StatefulWidget {
     required this.onViewHistory,
   });
 
+  final String title;
+  final String periodText;
   final int initialAmount;
   final int finalAmount;
   final int profit;
@@ -784,6 +689,76 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
   void dispose() {
     _impactController.dispose();
     super.dispose();
+  }
+
+
+  Future<void> _openShareBottomSheet() async {
+    final GlobalKey boundaryKey = GlobalKey();
+    final ShareService shareService = const ShareService();
+    final SimulationSharePayload payload = SimulationSharePayload(
+      title: widget.title,
+      periodText: widget.periodText,
+      investText: '투자금 ${AppNumberFormat.formatMoney(widget.initialAmount)}',
+      finalText: '최종 ${AppNumberFormat.formatMoney(widget.finalAmount)}',
+      returnText: AppNumberFormat.formatPercent(widget.profitRate),
+      badgeText: _isPositive ? 'SIMULATOR 결과' : 'SIMULATOR 리포트',
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B22),
+      builder: (BuildContext sheetContext) {
+        bool isSharing = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            Future<void> onSharePressed() async {
+              setModalState(() {
+                isSharing = true;
+              });
+              try {
+                await shareService.shareSimulationCard(boundaryKey, payload);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')),
+                  );
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() {
+                    isSharing = false;
+                  });
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SimulationShareCard(boundaryKey: boundaryKey, payload: payload),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSharing ? null : onSharePressed,
+                        icon: isSharing
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.share),
+                        label: const Text('공유하기'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -856,15 +831,21 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          Align(
-                            alignment: Alignment.topRight,
-                            child: InkWell(
-                              onTap: () => Navigator.of(context).pop(),
-                              child: const Padding(
-                                padding: EdgeInsets.all(4),
-                                child: Icon(Icons.close, size: 20, color: Color(0xFFA1A1A8)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed: _openShareBottomSheet,
+                                icon: const Icon(Icons.share, size: 20, color: Color(0xFFA1A1A8)),
                               ),
-                            ),
+                              InkWell(
+                                onTap: () => Navigator.of(context).pop(),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(Icons.close, size: 20, color: Color(0xFFA1A1A8)),
+                                ),
+                              ),
+                            ],
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

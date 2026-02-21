@@ -9,9 +9,21 @@ class AdService {
 
   InterstitialAd? _interstitial;
   bool _loading = false;
+  bool _adsRemoved = false;
+
+  bool get adsRemoved => _adsRemoved;
+
+  void setAdsRemoved(bool value) {
+    _adsRemoved = value;
+    if (value) {
+      _interstitial?.dispose();
+      _interstitial = null;
+      _loading = false;
+    }
+  }
 
   Future<void> preloadInterstitial() async {
-    if (_loading || _interstitial != null) {
+    if (_adsRemoved || _loading || _interstitial != null) {
       return;
     }
 
@@ -21,6 +33,11 @@ class AdService {
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (InterstitialAd ad) {
+          if (_adsRemoved) {
+            ad.dispose();
+            _loading = false;
+            return;
+          }
           _interstitial?.dispose();
           _interstitial = ad;
           _loading = false;
@@ -34,18 +51,26 @@ class AdService {
     );
   }
 
-
   Future<InterstitialAd?> takeOrLoadInterstitial() async {
+    if (_adsRemoved) {
+      return null;
+    }
+
     final InterstitialAd? cached = _interstitial;
     if (cached != null) {
       _interstitial = null;
       return cached;
     }
 
-    return AdHelper.loadInterstitial();
+    return AdHelper.loadInterstitial(adsRemoved: _adsRemoved);
   }
 
   Future<void> showOnClose({required VoidCallback onDone}) async {
+    if (_adsRemoved) {
+      onDone();
+      return;
+    }
+
     final InterstitialAd? ad = _interstitial;
     if (ad == null) {
       onDone();
