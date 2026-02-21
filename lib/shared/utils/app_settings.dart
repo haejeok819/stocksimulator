@@ -6,8 +6,8 @@ class AppSettings {
   static final ValueNotifier<bool> chartMotionEnabled = ValueNotifier<bool>(true);
   static final ValueNotifier<DateTime?> speed8xUnlockedUntil = ValueNotifier<DateTime?>(null);
 
-  static const String dataSource = '국내 주식/금/환율 로컬 데이터';
-  static const String dataVersion = 'v1';
+  static const String dataSource = '공공데이터포탈\nhttps://www.data.go.kr/';
+  static const String dataVersion = 'v2';
 
   static bool get is8xSpeedUnlocked {
     final DateTime? unlockUntil = speed8xUnlockedUntil.value;

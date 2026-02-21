@@ -24,10 +24,12 @@ class _SimHomeScreenState extends State<SimHomeScreen> {
   final ScrollController _stockListScrollController = ScrollController();
 
   static const List<String> _placeholders = <String>[
+    '1년전에 삼성전자를 샀더라면?',
     '삼성 vs 현대차, 뭐가 더 올랐을까?',
     '코스피 대형주, 어디가 더 강했을까?',
     '코스피 5000의 주인공 삼성의 상승세는?',
-    '10년동안 묵혀뒀다면 얼마를 벌었을까?',
+    '5년동안 묵혀뒀다면 얼마를 벌었을까?',
+    '5년전 SK하이닉스의 가격은?',
     '코로나 때 샀더라면?',
   ];
 

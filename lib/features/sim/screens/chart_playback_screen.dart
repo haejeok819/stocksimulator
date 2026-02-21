@@ -87,6 +87,35 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
 
+
+
+
+
+
+  bool _pausePlaybackForInteraction() {
+    final bool wasPlaying = _playing;
+    _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+    return wasPlaying;
+  }
+
+  void _resumePlaybackIfNeeded(bool shouldResume) {
+    if (!mounted || !shouldResume) return;
+    setState(() {
+      _playing = true;
+      _lastFrameElapsed = null;
+      if (!_frameTicker.isActive) {
+        _frameTicker.start();
+      }
+    });
+  }
+
+
+
+
   void _on8xUnlockChanged() {
     _schedule8xUnlockExpiryCheck();
     if (!mounted) return;
@@ -120,10 +149,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
   Future<bool> _showRewardedAdFor8xUnlock() async {
-    if (AdService.instance.adsRemoved) {
-      return true;
-    }
-
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (!mounted || ad == null) {
       return false;
@@ -153,50 +178,24 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     return watched;
   }
 
-
-  bool _pausePlaybackForInteraction() {
-    final bool wasPlaying = _playing;
-    _playing = false;
-    _lastFrameElapsed = null;
-    if (_frameTicker.isActive) {
-      _frameTicker.stop();
-    }
-    return wasPlaying;
-  }
-
-  void _resumePlaybackIfNeeded(bool shouldResume) {
-    if (!mounted || !shouldResume) return;
-    setState(() {
-      _playing = true;
-      _lastFrameElapsed = null;
-      if (!_frameTicker.isActive) {
-        _frameTicker.start();
-      }
-    });
-  }
-
   Future<void> _onSpeedSelected(double selectedSpeed) async {
-    if (_isSpeedFlowInProgress || !mounted) return;
-
-    final bool shouldResumeAfterFlow = _pausePlaybackForInteraction();
-
     if (selectedSpeed != 8) {
+      if (!mounted) return;
       setState(() {
         _speed = selectedSpeed;
+        _lastFrameElapsed = null;
       });
-      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
       return;
     }
 
     if (AppSettings.is8xSpeedUnlocked) {
+      if (!mounted) return;
       setState(() {
         _speed = 8;
+        _lastFrameElapsed = null;
       });
-      _resumePlaybackIfNeeded(shouldResumeAfterFlow);
       return;
     }
-
-    _isSpeedFlowInProgress = true;
 
     final bool? shouldWatchAd = await showDialog<bool>(
       context: context,
@@ -212,25 +211,24 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
       },
     );
 
-    if (shouldWatchAd == true && mounted) {
-      final bool unlocked = await _showRewardedAdFor8xUnlock();
-      if (mounted && unlocked) {
-        AppSettings.unlock8xSpeedFor(_unlockDuration);
-        setState(() {
-          _speed = 8;
-        });
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
-        );
-      }
+    if (shouldWatchAd != true || !mounted) return;
+
+    final bool unlocked = await _showRewardedAdFor8xUnlock();
+    if (!mounted) return;
+
+    if (unlocked) {
+      AppSettings.unlock8xSpeedFor(_unlockDuration);
+      setState(() {
+        _speed = 8;
+        _lastFrameElapsed = null;
+      });
+      return;
     }
 
-    _isSpeedFlowInProgress = false;
-    _resumePlaybackIfNeeded(shouldResumeAfterFlow);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+    );
   }
-
-
 
   bool get _isWindowsDesktop {
     if (kIsWeb) return false;
@@ -312,11 +310,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     _lastFrameElapsed = null;
     if (_frameTicker.isActive) {
       _frameTicker.stop();
-    }
-
-    if (AdService.instance.adsRemoved) {
-      _showResult();
-      return;
     }
 
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();

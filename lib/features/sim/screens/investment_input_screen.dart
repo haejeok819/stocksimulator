@@ -164,12 +164,12 @@ class _InvestmentInputScreenState extends ConsumerState<InvestmentInputScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            _formatWon(amount),
+                            AppNumberFormat.formatInt(amount),
                             style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            _approxKorean(amount),
+                            AppNumberFormat.formatInt(amount),
                             style: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
                           ),
                         ],

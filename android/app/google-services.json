@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "242887280631",
+    "project_id": "stock-a0a8c",
+    "storage_bucket": "stock-a0a8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:242887280631:android:c04a35020026b7468590f2",
+        "android_client_info": {
+          "package_name": "com.motorstock.stocksimulator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXN-HhZy7JLjjLdKtd2E39EYLkkyD5SN0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
