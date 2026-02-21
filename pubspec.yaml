@@ -61,14 +61,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 
-dependency_overrides:
-  firebase_core:
-    path: third_party/firebase_core_nowindows
-  firebase_auth:
-    path: third_party/firebase_auth_nowindows
-  cloud_firestore:
-    path: third_party/cloud_firestore_nowindows
-
 flutter:
 
   # The following line ensures that the Material Icons font is
