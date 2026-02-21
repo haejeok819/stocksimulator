@@ -117,6 +117,10 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
   Future<bool> _showRewardedAdFor8xUnlock() async {
+    if (AdService.instance.adsRemoved) {
+      return true;
+    }
+
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (!mounted || ad == null) {
       return false;
@@ -224,119 +228,6 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
 
-  void _on8xUnlockChanged() {
-    _schedule8xUnlockExpiryCheck();
-    if (!mounted) return;
-    setState(() {
-      if (!AppSettings.is8xSpeedUnlocked && _speed == 8) {
-        _speed = 4;
-      }
-    });
-  }
-
-  void _schedule8xUnlockExpiryCheck() {
-    _speedUnlockTimer?.cancel();
-    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
-    if (unlockUntil == null) {
-      return;
-    }
-
-    final Duration remaining = unlockUntil.difference(DateTime.now());
-    if (remaining <= Duration.zero) {
-      if (AppSettings.speed8xUnlockedUntil.value != null) {
-        AppSettings.speed8xUnlockedUntil.value = null;
-      }
-      return;
-    }
-
-    _speedUnlockTimer = Timer(remaining, () {
-      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
-        AppSettings.speed8xUnlockedUntil.value = null;
-      }
-    });
-  }
-
-  Future<bool> _showRewardedAdFor8xUnlock() async {
-    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
-    if (!mounted || ad == null) {
-      return false;
-    }
-
-    final Completer<bool> completer = Completer<bool>();
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (InterstitialAd ad) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(true);
-      },
-      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(false);
-      },
-    );
-
-    try {
-      ad.show();
-    } catch (_) {
-      ad.dispose();
-      if (!completer.isCompleted) completer.complete(false);
-    }
-
-    final bool watched = await completer.future;
-    AdService.instance.preloadInterstitial();
-    return watched;
-  }
-
-  Future<void> _onSpeedSelected(double selectedSpeed) async {
-    if (selectedSpeed != 8) {
-      if (!mounted) return;
-      setState(() {
-        _speed = selectedSpeed;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    if (AppSettings.is8xSpeedUnlocked) {
-      if (!mounted) return;
-      setState(() {
-        _speed = 8;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    final bool? shouldWatchAd = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('8x 스피드 잠금'),
-          content: const Text('광고를 보고나서 8x 스피드를 할 수 있어요.\n5분 동안은 광고가 뜨지 않아요.'),
-          actions: <Widget>[
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
-          ],
-        );
-      },
-    );
-
-    if (shouldWatchAd != true || !mounted) return;
-
-    final bool unlocked = await _showRewardedAdFor8xUnlock();
-    if (!mounted) return;
-
-    if (unlocked) {
-      AppSettings.unlock8xSpeedFor(_unlockDuration);
-      setState(() {
-        _speed = 8;
-        _lastFrameElapsed = null;
-      });
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
-    );
-  }
 
   bool get _isWindowsDesktop {
     if (kIsWeb) return false;
@@ -418,6 +309,11 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     _lastFrameElapsed = null;
     if (_frameTicker.isActive) {
       _frameTicker.stop();
+    }
+
+    if (AdService.instance.adsRemoved) {
+      _showResult();
+      return;
     }
 
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();

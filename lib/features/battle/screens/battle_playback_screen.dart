@@ -85,6 +85,10 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   }
 
   Future<bool> _showInterstitialAdGate() async {
+    if (AdService.instance.adsRemoved) {
+      return true;
+    }
+
     final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
     if (!mounted || ad == null) {
       return false;
