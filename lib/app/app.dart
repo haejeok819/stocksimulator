@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/router/app_router.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
+import 'package:stocksimulator/shared/state/ads_removed_provider.dart';
 
-class StockSimulatorApp extends StatelessWidget {
+class StockSimulatorApp extends ConsumerWidget {
   const StockSimulatorApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(adsRemovedProvider);
+
     return MaterialApp(
       title: 'Stock Simulator',
       theme: AppTheme.darkTheme,
