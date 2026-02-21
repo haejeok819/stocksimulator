@@ -57,6 +57,7 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
         );
 
   static const double _defaultSpeed = 1;
+  static const double _globalPlaybackSpeedMultiplier = 3.0;
   static const Duration _safeModeFrameInterval = Duration(milliseconds: 20);
   static const Duration _normalModeFrameInterval = Duration(milliseconds: 16);
   static const Duration _safeModeStartDelay = Duration(milliseconds: 120);
@@ -134,13 +135,15 @@ class BattlePlaybackController extends StateNotifier<BattlePlaybackState> {
   Duration _frameInterval() => _safeMode ? _safeModeFrameInterval : _normalModeFrameInterval;
 
   double _basePointsPerSecond(int length) {
+    final double baseSpeed;
     if (length <= 252) {
-      return _safeMode ? 0.70 : 0.92;
+      baseSpeed = _safeMode ? 0.70 : 0.92;
+    } else if (length <= 1260) {
+      baseSpeed = _safeMode ? 2.0 : 2.6;
+    } else {
+      baseSpeed = _safeMode ? 6.0 : 7.5;
     }
-    if (length <= 1260) {
-      return _safeMode ? 2.0 : 2.6;
-    }
-    return _safeMode ? 6.0 : 7.5;
+    return baseSpeed * _globalPlaybackSpeedMultiplier;
   }
 
   void _runPlayback() {
