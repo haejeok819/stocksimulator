@@ -29,7 +29,7 @@ class CaptureService {
     }
 
     final ui.Image image = await renderObject.toImage(pixelRatio: pixelRatio);
-    final ui.ByteData? byteData =
+    final ByteData? byteData =
         await image.toByteData(format: ui.ImageByteFormat.png);
 
     if (byteData == null) {
