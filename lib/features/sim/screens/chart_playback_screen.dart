@@ -404,6 +404,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               onDone: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
             );
           },
+          chartValues: widget.points.map((SimulationPoint point) => point.value).toList(),
         );
       },
     );
@@ -650,6 +651,7 @@ class _ResultDialog extends StatefulWidget {
     required this.profit,
     required this.profitRate,
     required this.onRetry,
+    required this.chartValues,
   });
 
   final String title;
@@ -659,6 +661,7 @@ class _ResultDialog extends StatefulWidget {
   final int profit;
   final double profitRate;
   final VoidCallback onRetry;
+  final List<double> chartValues;
 
   @override
   State<_ResultDialog> createState() => _ResultDialogState();
@@ -737,7 +740,7 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    SimulationShareCard(boundaryKey: boundaryKey, payload: payload),
+                    ShareChartCard(boundaryKey: boundaryKey, payload: payload, chartValues: widget.chartValues),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
