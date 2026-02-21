@@ -3,18 +3,64 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
+import 'package:stocksimulator/features/records/models/attempt_record.dart';
+import 'package:stocksimulator/features/records/state/records_providers.dart';
+import 'package:stocksimulator/shared/auth/auth_providers.dart';
 import 'package:stocksimulator/shared/share/services/share_service.dart';
 import 'package:stocksimulator/shared/share/share_payload.dart';
 import 'package:stocksimulator/shared/share/widgets/share_card.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
-class BattleResultScreen extends ConsumerWidget {
+class BattleResultScreen extends ConsumerStatefulWidget {
   const BattleResultScreen({super.key});
+
+  @override
+  ConsumerState<BattleResultScreen> createState() => _BattleResultScreenState();
+}
+
+class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
+  bool _saved = false;
 
   String _fmt(double value) => AppNumberFormat.formatInt(value);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_saved) return;
+    _saved = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _saveRecordIfSignedIn();
+    });
+  }
+
+  Future<void> _saveRecordIfSignedIn() async {
+    final BattleSetupState setup = ref.read(battleSetupProvider);
+    final BattleResultState? result = ref.read(battleResultProvider);
+    if (result == null) return;
+
+    final String? uid = ref.read(authControllerProvider).user?.uid;
+    if (uid == null || uid.isEmpty) return;
+
+    await ref.read(recordsControllerProvider).addRecord(
+      AttemptRecord(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        uid: uid,
+        mode: 'BATTLE',
+        tickerA: setup.stockA?.ticker ?? '',
+        nameA: _koreanName(setup.stockA),
+        tickerB: setup.stockB?.ticker ?? '',
+        nameB: _koreanName(setup.stockB),
+        startYmd: DateFormat('yyyyMMdd').format(setup.startDate),
+        endYmd: DateFormat('yyyyMMdd').format(setup.endDate),
+        returnPctA: result.finalReturnA,
+        returnPctB: result.finalReturnB,
+        createdAtIso: DateTime.now().toIso8601String(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final BattleSetupState setup = ref.watch(battleSetupProvider);
     final BattleResultState? result = ref.watch(battleResultProvider);
 
@@ -61,13 +107,6 @@ class BattleResultScreen extends ConsumerWidget {
             OutlinedButton(
               onPressed: () => Navigator.of(context).popUntil((Route<dynamic> route) => route.isFirst),
               child: const Text('설정으로'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('기록 저장은 추후 연동 예정입니다.')));
-              },
-              child: const Text('기록 저장'),
             ),
           ],
         ),

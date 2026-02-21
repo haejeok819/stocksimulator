@@ -1,67 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:stocksimulator/data/models/simulation_result.dart';
-import 'package:stocksimulator/data/repositories/history_repository.dart';
-import 'package:stocksimulator/shared/utils/number_format.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stocksimulator/features/records/state/records_providers.dart';
+import 'package:stocksimulator/features/records/widgets/records_list_view.dart';
+import 'package:stocksimulator/features/records/widgets/records_login_gate.dart';
+import 'package:stocksimulator/shared/auth/auth_providers.dart';
+import 'package:stocksimulator/shared/auth/auth_state.dart';
 
-class HistoryScreen extends StatefulWidget {
+class HistoryScreen extends ConsumerWidget {
   const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AuthState authState = ref.watch(authControllerProvider);
 
-class _HistoryScreenState extends State<HistoryScreen> {
-  final HistoryRepository _repository = HistoryRepository();
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('시뮬레이션 기록')),
-      body: FutureBuilder<List<SimulationResult>>(
-        future: _repository.load(),
-        builder: (BuildContext context, AsyncSnapshot<List<SimulationResult>> snapshot) {
-          final List<SimulationResult> items = snapshot.data ?? <SimulationResult>[];
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (items.isEmpty) {
-            return const Center(child: Text('기록이 없습니다.'));
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (BuildContext context, int index) {
-              final SimulationResult item = items[index];
-              return ListTile(
-                tileColor: const Color(0xFF2A2A33),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                title: Text(item.ticker),
-                subtitle: Text('${_fmt(item.startYmd)} ~ ${_fmt(item.endYmd)}'),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    Text('금액 ${AppNumberFormat.formatInt(item.amount)}'),
-                    Text('수익률 ${AppNumberFormat.formatPercent(item.profitRate)}'),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+      appBar: AppBar(
+        title: const Text('기록'),
+        actions: <Widget>[
+          if (authState.isSignedIn)
+            IconButton(
+              onPressed: authState.isLoading ? null : () => ref.read(authControllerProvider.notifier).signOut(),
+              icon: const Icon(Icons.logout),
+            ),
+          if (authState.isSignedIn)
+            IconButton(
+              onPressed: () => ref.read(recordsControllerProvider).clearCurrentUserRecords(),
+              icon: const Icon(Icons.delete_sweep_outlined),
+            ),
+        ],
       ),
+      body: authState.isSignedIn ? const RecordsListView() : const RecordsLoginGate(),
     );
-  }
-
-  String _fmt(int ymd) {
-    final String s = ymd.toString();
-    if (s.length != 8) {
-      return s;
-    }
-    return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
   }
 }

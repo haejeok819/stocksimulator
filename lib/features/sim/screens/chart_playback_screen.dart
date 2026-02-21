@@ -4,11 +4,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:stocksimulator/app/theme/playback_design_tokens.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
-import 'package:stocksimulator/data/models/simulation_result.dart';
-import 'package:stocksimulator/data/repositories/history_repository.dart';
+import 'package:stocksimulator/features/records/models/attempt_record.dart';
+import 'package:stocksimulator/features/records/state/records_providers.dart';
+import 'package:stocksimulator/shared/auth/auth_providers.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
@@ -35,8 +37,6 @@ class ChartPlaybackScreen extends StatefulWidget {
 }
 
 class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTickerProviderStateMixin {
-  final HistoryRepository _historyRepository = HistoryRepository();
-
   Timer? _skipTimer;
   late final Ticker _frameTicker;
   bool _resultShown = false;
@@ -372,15 +372,23 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     final int profit = finalAmount - investedAmount;
     final double profitRate = investedAmount == 0 ? 0 : (profit / investedAmount) * 100;
 
-    await _historyRepository.append(
-      SimulationResult(
-        ticker: widget.flowState.selectedStock?.ticker ?? '',
-        startYmd: widget.points.first.ymd,
-        endYmd: widget.points.last.ymd,
-        amount: finalAmount,
-        profitRate: profitRate,
-      ),
-    );
+    final String? uid = ProviderScope.containerOf(context, listen: false).read(authControllerProvider).user?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      final String stockName = widget.flowState.selectedStock?.displayName ?? widget.flowState.selectedStock?.ticker ?? '';
+      await ProviderScope.containerOf(context, listen: false).read(recordsControllerProvider).addRecord(
+        AttemptRecord(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          uid: uid,
+          mode: 'SIM',
+          tickerA: widget.flowState.selectedStock?.ticker ?? '',
+          nameA: stockName,
+          startYmd: widget.points.first.ymd.toString(),
+          endYmd: widget.points.last.ymd.toString(),
+          returnPctA: profitRate,
+          createdAtIso: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
 
     if (!mounted) return;
 
