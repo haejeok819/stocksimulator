@@ -42,8 +42,11 @@ class ShareService {
     final Uint8List imageBytes =
         await CaptureService.capturePng(boundaryKey, pixelRatio: pixelRatio);
     final String shareText = ShareTextComposer.battle(
-      winnerText: payload.winnerText,
-      periodText: payload.periodText,
+      assetAName: payload.assetAName,
+      assetBName: payload.assetBName,
+      assetAReturn: payload.assetAReturnText,
+      assetBReturn: payload.assetBReturnText,
+      winnerLabel: payload.winnerLabel,
     );
 
     await shareResult(imageBytes, shareText);

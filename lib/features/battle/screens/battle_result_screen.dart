@@ -21,6 +21,7 @@ class BattleResultScreen extends ConsumerStatefulWidget {
 class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
   bool _saved = false;
 
+  static const double _tieEpsilonPct = 0.01;
   String _fmt(double value) => AppNumberFormat.formatInt(value);
 
   @override
@@ -63,6 +64,8 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
   Widget build(BuildContext context) {
     final BattleSetupState setup = ref.watch(battleSetupProvider);
     final BattleResultState? result = ref.watch(battleResultProvider);
+    final AsyncValue<BattleSeriesData> dataAsync = ref.watch(battleDataProvider);
+    final bool shareEnabled = result != null && dataAsync.hasValue && _canShare(dataAsync.value);
 
     if (result == null) {
       return const Scaffold(body: Center(child: Text('결과가 없습니다.')));
@@ -74,7 +77,7 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
         actions: <Widget>[
           IconButton(
             icon: const Icon(Icons.share),
-            onPressed: () => _openShareBottomSheet(context: context, setup: setup, result: result),
+            onPressed: shareEnabled ? () => _openShareBottomSheet(context: context, setup: setup, result: result, data: dataAsync.value!) : null,
           ),
         ],
       ),
@@ -87,7 +90,7 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
               decoration: BoxDecoration(color: const Color(0xFF2A2A33), borderRadius: BorderRadius.circular(14)),
               child: Column(
                 children: <Widget>[
-                  Text('🏆 ${result.winner} 승리', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                  Text('🏆 ${_winnerLabel(result)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   _resultRow('A', _koreanName(setup.stockA), result.finalValueA, result.finalReturnA),
                   const SizedBox(height: 8),
@@ -96,6 +99,21 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
               ),
             ),
             const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: shareEnabled
+                    ? () => _openShareBottomSheet(context: context, setup: setup, result: result, data: dataAsync.value!)
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('공유할 대결 데이터가 부족해요. 다시 시도해주세요.')),
+                        );
+                      },
+                icon: const Icon(Icons.share),
+                label: const Text('결과 공유하기'),
+              ),
+            ),
+            const SizedBox(height: 8),
             ElevatedButton(
               onPressed: () {
                 ref.invalidate(battleDataProvider);
@@ -114,24 +132,27 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
     );
   }
 
+  bool _canShare(BattleSeriesData? data) {
+    if (data == null) return false;
+    return data.valuesA.length > 1 && data.valuesB.length > 1;
+  }
+
   Future<void> _openShareBottomSheet({
     required BuildContext context,
     required BattleSetupState setup,
     required BattleResultState result,
+    required BattleSeriesData data,
   }) async {
+    if (!_canShare(data)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('공유할 대결 데이터가 부족해요.')),
+      );
+      return;
+    }
+
     final GlobalKey boundaryKey = GlobalKey();
     final ShareService shareService = const ShareService();
-    final DateFormat formatter = DateFormat('yyyy.MM.dd');
-
-    final BattleSharePayload payload = BattleSharePayload(
-      aTitle: _koreanName(setup.stockA),
-      aReturnText: AppNumberFormat.formatPercent(result.finalReturnA),
-      bTitle: _koreanName(setup.stockB),
-      bReturnText: AppNumberFormat.formatPercent(result.finalReturnB),
-      periodText: '${formatter.format(setup.startDate)} ~ ${formatter.format(setup.endDate)}',
-      winnerText: '${result.winner} 승리',
-      badgeText: 'BATTLE 결과',
-    );
+    final BattleSharePayload payload = _buildBattleSharePayload(setup: setup, result: result, data: data);
 
     await showModalBottomSheet<void>(
       context: context,
@@ -186,6 +207,56 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
         );
       },
     );
+  }
+
+  BattleSharePayload _buildBattleSharePayload({
+    required BattleSetupState setup,
+    required BattleResultState result,
+    required BattleSeriesData data,
+  }) {
+    final String aName = _koreanName(setup.stockA);
+    final String bName = _koreanName(setup.stockB);
+    final double delta = result.finalReturnA - result.finalReturnB;
+    final bool isTie = delta.abs() <= _tieEpsilonPct;
+    final bool aWon = delta > _tieEpsilonPct;
+    final String winnerLabel = isTie ? '무승부' : (aWon ? '$aName 승' : '$bName 승');
+    final int startYmd = data.normalized.dates.first;
+    final int endYmd = data.normalized.dates.last;
+    final String periodText = '${_formatYmd(startYmd)} ~ ${_formatYmd(endYmd)}';
+    final String deltaLabel = isTie ? '무승부 (차이 ${delta.abs().toStringAsFixed(2)}%p)' : '차이 ${delta.abs().toStringAsFixed(2)}%p';
+
+    return BattleSharePayload(
+      assetAName: aName,
+      assetBName: bName,
+      assetAReturnText: AppNumberFormat.formatPercent(result.finalReturnA),
+      assetBReturnText: AppNumberFormat.formatPercent(result.finalReturnB),
+      initialInvestmentText: '초기 ${AppNumberFormat.formatMoney(setup.investAmount)}',
+      finalValueAText: '최종 ${AppNumberFormat.formatMoney(result.finalValueA.round())}',
+      finalValueBText: '최종 ${AppNumberFormat.formatMoney(result.finalValueB.round())}',
+      periodText: periodText,
+      winnerLabel: winnerLabel,
+      deltaText: deltaLabel,
+      badgeText: 'BATTLE 결과',
+      curiosityLine: ShareTextComposer.randomCuriosityLine(),
+      seriesA: data.valuesA,
+      seriesB: data.valuesB,
+      aWon: aWon,
+      isTie: isTie,
+      shortIntersectionNotice: data.length < 45,
+    );
+  }
+
+  String _winnerLabel(BattleResultState result) {
+    final double delta = result.finalReturnA - result.finalReturnB;
+    if (delta.abs() <= _tieEpsilonPct) {
+      return '무승부';
+    }
+    return result.winner;
+  }
+
+  String _formatYmd(int ymd) {
+    final String s = ymd.toString().padLeft(8, '0');
+    return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
   }
 
   String _koreanName(StockModel? stock) {

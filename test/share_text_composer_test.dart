@@ -17,8 +17,11 @@ void main() {
 
   test('battle share text contains app link and remains short', () {
     final String text = ShareTextComposer.battle(
-      winnerText: 'A 승리 +24.10%',
-      periodText: '2019.01.01 ~ 2024.12.31',
+      assetAName: '삼성전자',
+      assetBName: '현대차',
+      assetAReturn: '+24.10%',
+      assetBReturn: '+10.20%',
+      winnerLabel: '삼성전자 승',
     );
 
     expect(text, contains(ShareTextComposer.appLink));
