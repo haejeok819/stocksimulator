@@ -1,13 +1,11 @@
 import 'dart:io';
 
-import 'package:firebase_core/firebase_core.dart';
-
-import 'firebase_options.dart';
-
 Future<void> bootstrapFirebase() async {
+  // Windows desktop build must not link Firebase native plugins.
   if (Platform.isWindows) {
     return;
   }
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Firebase initialization intentionally disabled here until
+  // platform-specific Firebase plugin linkage is reintroduced safely.
 }
