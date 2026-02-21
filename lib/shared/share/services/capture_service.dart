@@ -1,27 +1,39 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/widgets.dart';
 
 class CaptureService {
-  const CaptureService();
+  static Future<Uint8List> capturePng(
+    GlobalKey key, {
+    double pixelRatio = 3,
+  }) async {
+    // 1 frame wait to ensure the boundary has painted
+    await Future.delayed(const Duration(milliseconds: 16));
 
-  Future<Uint8List> capturePng(GlobalKey key, {double pixelRatio = 3}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 16));
     final BuildContext? context = key.currentContext;
     if (context == null) {
-      throw StateError('Capture boundary is not ready.');
+      throw Exception('CaptureService: boundaryKey.currentContext is null');
     }
 
     final RenderObject? renderObject = context.findRenderObject();
+    if (renderObject == null) {
+      throw Exception('CaptureService: renderObject is null');
+    }
+
     if (renderObject is! RenderRepaintBoundary) {
-      throw StateError('Capture boundary is missing.');
+      throw Exception(
+        'CaptureService: renderObject is not RenderRepaintBoundary (${renderObject.runtimeType})',
+      );
     }
 
     final ui.Image image = await renderObject.toImage(pixelRatio: pixelRatio);
-    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final ui.ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+
     if (byteData == null) {
-      throw StateError('Failed to convert capture to PNG.');
+      throw Exception('CaptureService: toByteData returned null');
     }
 
     return byteData.buffer.asUint8List();
