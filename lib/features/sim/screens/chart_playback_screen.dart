@@ -12,6 +12,9 @@ import 'package:stocksimulator/data/repositories/history_repository.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
+import 'package:stocksimulator/shared/share/services/share_service.dart';
+import 'package:stocksimulator/shared/share/share_payload.dart';
+import 'package:stocksimulator/shared/share/widgets/share_card.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
 
@@ -386,6 +389,8 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
       barrierDismissible: true,
       builder: (BuildContext context) {
         return _ResultDialog(
+          title: widget.flowState.selectedStock?.displayName ?? '시뮬레이션 결과',
+          periodText: '${_formatYmd(widget.points.first.ymd)} ~ ${_formatYmd(widget.points.last.ymd)}',
           initialAmount: investedAmount,
           finalAmount: finalAmount,
           profit: profit,
@@ -638,6 +643,8 @@ class _PlayButton extends StatelessWidget {
 
 class _ResultDialog extends StatefulWidget {
   const _ResultDialog({
+    required this.title,
+    required this.periodText,
     required this.initialAmount,
     required this.finalAmount,
     required this.profit,
@@ -646,6 +653,8 @@ class _ResultDialog extends StatefulWidget {
     required this.onViewHistory,
   });
 
+  final String title;
+  final String periodText;
   final int initialAmount;
   final int finalAmount;
   final int profit;
@@ -680,6 +689,76 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
   void dispose() {
     _impactController.dispose();
     super.dispose();
+  }
+
+
+  Future<void> _openShareBottomSheet() async {
+    final GlobalKey boundaryKey = GlobalKey();
+    final ShareService shareService = const ShareService();
+    final SimulationSharePayload payload = SimulationSharePayload(
+      title: widget.title,
+      periodText: widget.periodText,
+      investText: '투자금 ${AppNumberFormat.formatMoney(widget.initialAmount)}',
+      finalText: '최종 ${AppNumberFormat.formatMoney(widget.finalAmount)}',
+      returnText: AppNumberFormat.formatPercent(widget.profitRate),
+      badgeText: _isPositive ? 'SIMULATOR 결과' : 'SIMULATOR 리포트',
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B22),
+      builder: (BuildContext sheetContext) {
+        bool isSharing = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            Future<void> onSharePressed() async {
+              setModalState(() {
+                isSharing = true;
+              });
+              try {
+                await shareService.shareSimulationCard(boundaryKey, payload);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')),
+                  );
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() {
+                    isSharing = false;
+                  });
+                }
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SimulationShareCard(boundaryKey: boundaryKey, payload: payload),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSharing ? null : onSharePressed,
+                        icon: isSharing
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.share),
+                        label: const Text('공유하기'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -752,15 +831,21 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          Align(
-                            alignment: Alignment.topRight,
-                            child: InkWell(
-                              onTap: () => Navigator.of(context).pop(),
-                              child: const Padding(
-                                padding: EdgeInsets.all(4),
-                                child: Icon(Icons.close, size: 20, color: Color(0xFFA1A1A8)),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed: _openShareBottomSheet,
+                                icon: const Icon(Icons.share, size: 20, color: Color(0xFFA1A1A8)),
                               ),
-                            ),
+                              InkWell(
+                                onTap: () => Navigator.of(context).pop(),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(Icons.close, size: 20, color: Color(0xFFA1A1A8)),
+                                ),
+                              ),
+                            ],
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
