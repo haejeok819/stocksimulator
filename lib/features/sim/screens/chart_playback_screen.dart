@@ -425,6 +425,64 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     return '${AppNumberFormat.formatInt(price)}원';
   }
 
+
+  double _speedLabelFontSize(BuildContext context) {
+    final double width = MediaQuery.sizeOf(context).width;
+    return (width * 0.028).clamp(11.0, 14.0).toDouble();
+  }
+
+  ButtonStyle _speedSegmentStyle(BuildContext context) {
+    return ButtonStyle(
+      minimumSize: MaterialStateProperty.all(const Size(54, 38)),
+      padding: MaterialStateProperty.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 7)),
+      side: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const BorderSide(color: Color(0xFF6EA8FF), width: 1.25);
+        }
+        return const BorderSide(color: Color(0x3D7A8CC7), width: 1.0);
+      }),
+      foregroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return const Color(0xFF7F8391);
+        }
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFFF2F7FF);
+        }
+        return const Color(0xFFD2D8E8);
+      }),
+      backgroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFF243B66);
+        }
+        return const Color(0xFF1E2432);
+      }),
+      textStyle: MaterialStateProperty.all(
+        TextStyle(
+          fontSize: _speedLabelFontSize(context),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+      shape: MaterialStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Text _speedTextLabel(BuildContext context, String value, {Color? color}) {
+    return Text(
+      value,
+      style: TextStyle(
+        fontSize: _speedLabelFontSize(context),
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textScaler: const TextScaler.linear(1.0),
+    );
+  }
+
   String _formatYmd(int ymd) {
     final String raw = ymd.toString().padLeft(8, '0');
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
@@ -512,30 +570,51 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
                 builder: (BuildContext context, DateTime? unlockUntil, _) {
                   final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
 
-                  return SegmentedButton<double>(
-                    segments: <ButtonSegment<double>>[
-                      const ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
-                      const ButtonSegment<double>(value: 1, label: Text('1x')),
-                      const ButtonSegment<double>(value: 2, label: Text('2x')),
-                      const ButtonSegment<double>(value: 4, label: Text('4x')),
-                      ButtonSegment<double>(
-                        value: 8,
-                        enabled: true,
-                        icon: Icon(
-                          is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                          size: 16,
-                          color: is8xUnlocked ? null : const Color(0xFF8B8B96),
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x3347A2FF),
+                          blurRadius: 16,
+                          spreadRadius: 0.7,
+                          offset: Offset(0, 4),
                         ),
-                        label: Text(
-                          '8x',
-                          style: TextStyle(color: is8xUnlocked ? null : const Color(0xFF8B8B96)),
+                        BoxShadow(
+                          color: Color(0x1F8CCBFF),
+                          blurRadius: 24,
+                          spreadRadius: 1.2,
                         ),
-                      ),
-                    ],
-                    selected: <double>{_speed},
-                    onSelectionChanged: (Set<double> value) {
-                      _onSpeedSelected(value.first);
-                    },
+                      ],
+                    ),
+                    child: SegmentedButton<double>(
+                      style: _speedSegmentStyle(context),
+                      showSelectedIcon: false,
+                      segments: <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 0.5, label: _speedTextLabel(context, '0.5x')),
+                        ButtonSegment<double>(value: 1, label: _speedTextLabel(context, '1x')),
+                        ButtonSegment<double>(value: 2, label: _speedTextLabel(context, '2x')),
+                        ButtonSegment<double>(value: 4, label: _speedTextLabel(context, '4x')),
+                        ButtonSegment<double>(
+                          value: 8,
+                          enabled: true,
+                          icon: Icon(
+                            is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                            size: 15,
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                          label: _speedTextLabel(
+                            context,
+                            '8x',
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                        ),
+                      ],
+                      selected: <double>{_speed},
+                      onSelectionChanged: (Set<double> value) {
+                        _onSpeedSelected(value.first);
+                      },
+                    ),
                   );
                 },
               ),
