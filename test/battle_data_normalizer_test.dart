@@ -39,4 +39,15 @@ void main() {
     expect(snapped.closeA, <double>[100, 102]);
     expect(snapped.closeB, <double>[200, 198]);
   });
+
+  test('normalizeBattleSeries returns empty when either side is empty', () {
+    final NormalizedBattleSeries normalized = normalizeBattleSeries(
+      aSeries: const <PricePoint>[],
+      bSeries: const <PricePoint>[PricePoint(ymd: 20240101, close: 200)],
+    );
+
+    expect(normalized.dates, isEmpty);
+    expect(normalized.closeA, isEmpty);
+    expect(normalized.closeB, isEmpty);
+  });
 }
