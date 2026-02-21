@@ -53,6 +53,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
   bool _isSpeedFlowInProgress = false;
+  static const double _globalPlaybackSpeedMultiplier = 3.0;
 
   @override
   void initState() {
@@ -237,13 +238,15 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   double get _basePointsPerSecond {
     final int totalDays = widget.points.length;
+    final double baseSpeed;
     if (totalDays <= 252) {
-      return _isWindowsDesktop ? 0.70 : 0.92;
+      baseSpeed = _isWindowsDesktop ? 0.70 : 0.92;
+    } else if (totalDays <= 1260) {
+      baseSpeed = _isWindowsDesktop ? 2.0 : 2.6;
+    } else {
+      baseSpeed = _isWindowsDesktop ? 6.0 : 7.5;
     }
-    if (totalDays <= 1260) {
-      return _isWindowsDesktop ? 2.0 : 2.6;
-    }
-    return _isWindowsDesktop ? 6.0 : 7.5;
+    return baseSpeed * _globalPlaybackSpeedMultiplier;
   }
 
   void _startPlayback() {
@@ -401,10 +404,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               onDone: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
             );
           },
-          onViewHistory: () {
-            Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst);
-            ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('기록 탭에서 결과를 확인하세요.')));
-          },
+          chartValues: widget.points.map((SimulationPoint point) => point.value).toList(),
         );
       },
     );
@@ -651,7 +651,7 @@ class _ResultDialog extends StatefulWidget {
     required this.profit,
     required this.profitRate,
     required this.onRetry,
-    required this.onViewHistory,
+    required this.chartValues,
   });
 
   final String title;
@@ -661,7 +661,7 @@ class _ResultDialog extends StatefulWidget {
   final int profit;
   final double profitRate;
   final VoidCallback onRetry;
-  final VoidCallback onViewHistory;
+  final List<double> chartValues;
 
   @override
   State<_ResultDialog> createState() => _ResultDialogState();
@@ -740,7 +740,7 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    SimulationShareCard(boundaryKey: boundaryKey, payload: payload),
+                    ShareChartCard(boundaryKey: boundaryKey, payload: payload, chartValues: widget.chartValues),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
@@ -910,8 +910,30 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                             style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
                             child: Text(ctaLabel),
                           ),
-                          const SizedBox(height: 4),
-                          TextButton(onPressed: widget.onViewHistory, child: const Text('기록 보기')),
+                          const SizedBox(height: 10),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: const Color(0xFF6AA8FF).withOpacity(0.34),
+                                  blurRadius: 18,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: FilledButton.icon(
+                              onPressed: _openShareBottomSheet,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 52),
+                                backgroundColor: const Color(0xFF3B82F6),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('공유하기'),
+                            ),
+                          ),
                         ],
                       ),
                     ),

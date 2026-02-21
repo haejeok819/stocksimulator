@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:stocksimulator/shared/share/services/capture_service.dart';
@@ -10,18 +12,53 @@ class ShareService {
 
   final ShareFileService _shareFileService;
 
-  Future<void> shareSimulationCard(GlobalKey boundaryKey, SimulationSharePayload payload) async {
-    final XFile imageFile = await _captureAndSave(boundaryKey, prefix: 'simulation_share');
-    await Share.shareXFiles(<XFile>[imageFile], text: '그때 살걸에서 결과 공유 📈\n${payload.returnText}');
+  static const String _defaultFileName = 'geuttae_salggeol_result.png';
+  static const double defaultPixelRatio = 3.0;
+  static const double storyPixelRatio = 4.0;
+
+  Future<void> shareSimulationCard(
+    GlobalKey boundaryKey,
+    SimulationSharePayload payload, {
+    double pixelRatio = defaultPixelRatio,
+  }) async {
+    final Uint8List imageBytes =
+        await CaptureService.capturePng(boundaryKey, pixelRatio: pixelRatio);
+    final String shareText = ShareTextComposer.simulation(
+      assetName: payload.title,
+      percentReturn: payload.returnText,
+      initialValue: payload.investText,
+      finalValue: payload.finalText,
+      dateRange: payload.periodText,
+    );
+
+    await shareResult(imageBytes, shareText);
   }
 
-  Future<void> shareBattleCard(GlobalKey boundaryKey, BattleSharePayload payload) async {
-    final XFile imageFile = await _captureAndSave(boundaryKey, prefix: 'battle_share');
-    await Share.shareXFiles(<XFile>[imageFile], text: '그때 살걸에서 결과 공유 📈\n${payload.winnerText}');
+  Future<void> shareBattleCard(
+    GlobalKey boundaryKey,
+    BattleSharePayload payload, {
+    double pixelRatio = defaultPixelRatio,
+  }) async {
+    final Uint8List imageBytes =
+        await CaptureService.capturePng(boundaryKey, pixelRatio: pixelRatio);
+    final String shareText = ShareTextComposer.battle(
+      winnerText: payload.winnerText,
+      periodText: payload.periodText,
+    );
+
+    await shareResult(imageBytes, shareText);
   }
 
-  Future<XFile> _captureAndSave(GlobalKey boundaryKey, {required String prefix}) async {
-    final bytes = await CaptureService.capturePng(boundaryKey);
-    return _shareFileService.saveTempPng(bytes, prefix: prefix);
+  Future<void> shareResult(
+    Uint8List imageBytes,
+    String text, {
+    String fileName = _defaultFileName,
+  }) async {
+    final XFile imageFile = await _shareFileService.saveTempPng(
+      imageBytes,
+      prefix: 'result_share',
+      fileName: fileName,
+    );
+    await Share.shareXFiles(<XFile>[imageFile], text: text);
   }
 }
