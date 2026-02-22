@@ -53,6 +53,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
   bool _isSpeedFlowInProgress = false;
+  static const double _globalPlaybackSpeedMultiplier = 3.0;
 
   @override
   void initState() {
@@ -237,13 +238,15 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   double get _basePointsPerSecond {
     final int totalDays = widget.points.length;
+    final double baseSpeed;
     if (totalDays <= 252) {
-      return _isWindowsDesktop ? 0.70 : 0.92;
+      baseSpeed = _isWindowsDesktop ? 0.70 : 0.92;
+    } else if (totalDays <= 1260) {
+      baseSpeed = _isWindowsDesktop ? 2.0 : 2.6;
+    } else {
+      baseSpeed = _isWindowsDesktop ? 6.0 : 7.5;
     }
-    if (totalDays <= 1260) {
-      return _isWindowsDesktop ? 2.0 : 2.6;
-    }
-    return _isWindowsDesktop ? 6.0 : 7.5;
+    return baseSpeed * _globalPlaybackSpeedMultiplier;
   }
 
   void _startPlayback() {
@@ -401,10 +404,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
               onDone: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
             );
           },
-          onViewHistory: () {
-            Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst);
-            ScaffoldMessenger.of(this.context).showSnackBar(const SnackBar(content: Text('기록 탭에서 결과를 확인하세요.')));
-          },
+          chartValues: widget.points.map((SimulationPoint point) => point.value).toList(),
         );
       },
     );
@@ -423,6 +423,64 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   String _formatPriceByMarket(double price, String _marketCode) {
     return '${AppNumberFormat.formatInt(price)}원';
+  }
+
+
+  double _speedLabelFontSize(BuildContext context) {
+    final double width = MediaQuery.sizeOf(context).width;
+    return (width * 0.028).clamp(11.0, 14.0).toDouble();
+  }
+
+  ButtonStyle _speedSegmentStyle(BuildContext context) {
+    return ButtonStyle(
+      minimumSize: MaterialStateProperty.all(const Size(54, 38)),
+      padding: MaterialStateProperty.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 7)),
+      side: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const BorderSide(color: Color(0xFF6EA8FF), width: 1.25);
+        }
+        return const BorderSide(color: Color(0x3D7A8CC7), width: 1.0);
+      }),
+      foregroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return const Color(0xFF7F8391);
+        }
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFFF2F7FF);
+        }
+        return const Color(0xFFD2D8E8);
+      }),
+      backgroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFF243B66);
+        }
+        return const Color(0xFF1E2432);
+      }),
+      textStyle: MaterialStateProperty.all(
+        TextStyle(
+          fontSize: _speedLabelFontSize(context),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+      shape: MaterialStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Text _speedTextLabel(BuildContext context, String value, {Color? color}) {
+    return Text(
+      value,
+      style: TextStyle(
+        fontSize: _speedLabelFontSize(context),
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textScaler: const TextScaler.linear(1.0),
+    );
   }
 
   String _formatYmd(int ymd) {
@@ -512,30 +570,51 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
                 builder: (BuildContext context, DateTime? unlockUntil, _) {
                   final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
 
-                  return SegmentedButton<double>(
-                    segments: <ButtonSegment<double>>[
-                      const ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
-                      const ButtonSegment<double>(value: 1, label: Text('1x')),
-                      const ButtonSegment<double>(value: 2, label: Text('2x')),
-                      const ButtonSegment<double>(value: 4, label: Text('4x')),
-                      ButtonSegment<double>(
-                        value: 8,
-                        enabled: true,
-                        icon: Icon(
-                          is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                          size: 16,
-                          color: is8xUnlocked ? null : const Color(0xFF8B8B96),
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x3347A2FF),
+                          blurRadius: 16,
+                          spreadRadius: 0.7,
+                          offset: Offset(0, 4),
                         ),
-                        label: Text(
-                          '8x',
-                          style: TextStyle(color: is8xUnlocked ? null : const Color(0xFF8B8B96)),
+                        BoxShadow(
+                          color: Color(0x1F8CCBFF),
+                          blurRadius: 24,
+                          spreadRadius: 1.2,
                         ),
-                      ),
-                    ],
-                    selected: <double>{_speed},
-                    onSelectionChanged: (Set<double> value) {
-                      _onSpeedSelected(value.first);
-                    },
+                      ],
+                    ),
+                    child: SegmentedButton<double>(
+                      style: _speedSegmentStyle(context),
+                      showSelectedIcon: false,
+                      segments: <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 0.5, label: _speedTextLabel(context, '0.5x')),
+                        ButtonSegment<double>(value: 1, label: _speedTextLabel(context, '1x')),
+                        ButtonSegment<double>(value: 2, label: _speedTextLabel(context, '2x')),
+                        ButtonSegment<double>(value: 4, label: _speedTextLabel(context, '4x')),
+                        ButtonSegment<double>(
+                          value: 8,
+                          enabled: true,
+                          icon: Icon(
+                            is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                            size: 15,
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                          label: _speedTextLabel(
+                            context,
+                            '8x',
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                        ),
+                      ],
+                      selected: <double>{_speed},
+                      onSelectionChanged: (Set<double> value) {
+                        _onSpeedSelected(value.first);
+                      },
+                    ),
                   );
                 },
               ),
@@ -651,7 +730,7 @@ class _ResultDialog extends StatefulWidget {
     required this.profit,
     required this.profitRate,
     required this.onRetry,
-    required this.onViewHistory,
+    required this.chartValues,
   });
 
   final String title;
@@ -661,7 +740,7 @@ class _ResultDialog extends StatefulWidget {
   final int profit;
   final double profitRate;
   final VoidCallback onRetry;
-  final VoidCallback onViewHistory;
+  final List<double> chartValues;
 
   @override
   State<_ResultDialog> createState() => _ResultDialogState();
@@ -740,7 +819,7 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    SimulationShareCard(boundaryKey: boundaryKey, payload: payload),
+                    ShareChartCard(boundaryKey: boundaryKey, payload: payload, chartValues: widget.chartValues),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
@@ -910,8 +989,30 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                             style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
                             child: Text(ctaLabel),
                           ),
-                          const SizedBox(height: 4),
-                          TextButton(onPressed: widget.onViewHistory, child: const Text('기록 보기')),
+                          const SizedBox(height: 10),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: const Color(0xFF6AA8FF).withOpacity(0.34),
+                                  blurRadius: 18,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: FilledButton.icon(
+                              onPressed: _openShareBottomSheet,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 52),
+                                backgroundColor: const Color(0xFF3B82F6),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('공유하기'),
+                            ),
+                          ),
                         ],
                       ),
                     ),
