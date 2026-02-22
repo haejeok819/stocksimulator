@@ -137,22 +137,20 @@ class StockRepository {
     required List<PricePoint> prices,
     required int investment,
   }) {
-    if (prices.isEmpty) {
+    if (prices.isEmpty || investment <= 0) {
       return <SimulationPoint>[];
     }
 
-    final double amount = investment.toDouble();
     final double startClose = prices.first.close;
-    final double endClose = prices.last.close;
-    final double shares = amount / startClose;
-    final double finalValue = shares * endClose;
-    final double profit = finalValue - amount;
-    final double profitRate = profit / amount;
+    if (startClose <= 0) {
+      return <SimulationPoint>[];
+    }
+
+    final double shares = investment / startClose;
 
     if (kDebugMode) {
       debugPrint(
-        '[Simulation] startClose=$startClose, endClose=$endClose, finalValue=$finalValue, '
-        'profit=$profit, profitRate=$profitRate',
+        '[Simulation] startClose=$startClose, shares=$shares, points=${prices.length}',
       );
     }
 

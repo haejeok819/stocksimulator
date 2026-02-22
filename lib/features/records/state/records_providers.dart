@@ -9,7 +9,13 @@ import 'package:stocksimulator/shared/services/firebase_runtime.dart';
 
 final Provider<RecordsRepository> recordsRepositoryProvider =
     Provider<RecordsRepository>((Ref ref) {
-  if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows || !FirebaseRuntime.isReady) {
+  final String? uid = ref.watch(authControllerProvider).user?.uid;
+
+  if (kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.windows ||
+      !FirebaseRuntime.isReady ||
+      uid == null ||
+      uid.isEmpty) {
     return RecordsRepositoryLocal();
   }
 
