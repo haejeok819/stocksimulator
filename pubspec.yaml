@@ -97,3 +97,14 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+dependency_overrides:
+  # Windows 빌드에서 Firebase C++ 정적 링크 충돌을 피하기 위해
+  # Windows 플랫폼 선언을 제거한 로컬 fork를 사용한다.
+  firebase_core:
+    path: third_party/firebase_core_nowindows
+  firebase_auth:
+    path: third_party/firebase_auth_nowindows
+  cloud_firestore:
+    path: third_party/cloud_firestore_nowindows
