@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/shared/auth/auth_controller.dart';
@@ -14,7 +13,7 @@ class RecordsLoginGate extends ConsumerWidget {
     final AuthState state = ref.watch(authControllerProvider);
     final AuthController controller = ref.read(authControllerProvider.notifier);
 
-    final bool isWindows = Platform.isWindows;
+    final bool isWindows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
     return Center(
       child: Padding(

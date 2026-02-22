@@ -8,6 +8,10 @@ import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/battle/widgets/battle_chart.dart';
+import 'package:stocksimulator/shared/share/services/share_link_service.dart';
+import 'package:stocksimulator/shared/share/services/share_service.dart';
+import 'package:stocksimulator/shared/share/share_payload.dart';
+import 'package:stocksimulator/shared/share/widgets/share_card.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
 import 'package:stocksimulator/shared/utils/app_settings.dart';
 import 'package:stocksimulator/shared/utils/error_message.dart';
@@ -154,7 +158,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     setState(() {
       _isProcessingResultAd = false;
     });
-    await _showResultDialog(tick: tick, setup: setup);
+    await _showResultDialog(tick: tick, setup: setup, data: data);
   }
 
 
@@ -228,13 +232,218 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
 
   String _fmt(double value) => AppNumberFormat.formatInt(value);
 
+
+  double _speedLabelFontSize(BuildContext context) {
+    final double width = MediaQuery.sizeOf(context).width;
+    return (width * 0.028).clamp(11.0, 14.0).toDouble();
+  }
+
+  ButtonStyle _speedSegmentStyle(BuildContext context) {
+    return ButtonStyle(
+      minimumSize: MaterialStateProperty.all(const Size(54, 38)),
+      padding: MaterialStateProperty.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 7)),
+      side: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const BorderSide(color: Color(0xFF6EA8FF), width: 1.25);
+        }
+        return const BorderSide(color: Color(0x3D7A8CC7), width: 1.0);
+      }),
+      foregroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return const Color(0xFF7F8391);
+        }
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFFF2F7FF);
+        }
+        return const Color(0xFFD2D8E8);
+      }),
+      backgroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFF243B66);
+        }
+        return const Color(0xFF1E2432);
+      }),
+      textStyle: MaterialStateProperty.all(
+        TextStyle(
+          fontSize: _speedLabelFontSize(context),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+      shape: MaterialStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Text _speedTextLabel(BuildContext context, String value, {Color? color}) {
+    return Text(
+      value,
+      style: TextStyle(
+        fontSize: _speedLabelFontSize(context),
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textScaler: const TextScaler.linear(1.0),
+    );
+  }
+
   String _formatYmd(int ymd) {
     final String s = ymd.toString().padLeft(8, '0');
     return '${s.substring(0, 4)}.${s.substring(4, 6)}.${s.substring(6, 8)}';
   }
 
 
-  Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup}) async {
+  void _tryAutoShowResult({
+    required BattlePlaybackState playback,
+    required BattleSeriesData data,
+    required BattleSetupState setup,
+  }) {
+    if (_resultDialogShown || playback.status != BattlePlaybackStatus.ended || !mounted) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _resultDialogShown) return;
+      final BattleTick finalTick = data.tickAt(data.length - 1);
+      ref.read(battleResultProvider.notifier).state = BattleResultState(
+        finalValueA: finalTick.valueA,
+        finalValueB: finalTick.valueB,
+        finalReturnA: finalTick.returnA,
+        finalReturnB: finalTick.returnB,
+        winner: finalTick.returnA >= finalTick.returnB ? 'A' : 'B',
+      );
+      _showResultDialog(tick: finalTick, setup: setup, data: data);
+    });
+  }
+
+  BattleSharePayload _buildBattleSharePayload({
+    required BattleSetupState setup,
+    required BattleTick tick,
+    required BattleSeriesData data,
+  }) {
+    final String nameA = _koreanName(setup.stockA);
+    final String nameB = _koreanName(setup.stockB);
+    final double delta = tick.returnA - tick.returnB;
+    final bool isTie = delta.abs() <= 0.01;
+    final bool aWon = delta > 0.01;
+
+    final String winnerLabel = isTie ? '무승부' : (aWon ? '$nameA 승' : '$nameB 승');
+    final String deltaLabel = isTie ? '무승부 (차이 ${delta.abs().toStringAsFixed(2)}%p)' : '차이 ${delta.abs().toStringAsFixed(2)}%p';
+    final String periodText = '${_formatYmd(data.normalized.dates.first)} ~ ${_formatYmd(data.normalized.dates.last)}';
+
+    return BattleSharePayload(
+      assetAName: nameA,
+      assetBName: nameB,
+      assetAReturnText: AppNumberFormat.formatPercent(tick.returnA),
+      assetBReturnText: AppNumberFormat.formatPercent(tick.returnB),
+      initialInvestmentText: '초기 ${AppNumberFormat.formatMoney(setup.investAmount)}',
+      finalValueAText: '최종 ${AppNumberFormat.formatMoney(tick.valueA.round())}',
+      finalValueBText: '최종 ${AppNumberFormat.formatMoney(tick.valueB.round())}',
+      periodText: periodText,
+      winnerLabel: winnerLabel,
+      deltaText: deltaLabel,
+      badgeText: 'BATTLE 결과',
+      curiosityLine: ShareTextComposer.randomCuriosityLine(),
+      seriesA: data.valuesA,
+      seriesB: data.valuesB,
+      aWon: aWon,
+      isTie: isTie,
+      shortIntersectionNotice: data.length < 45,
+    );
+  }
+
+  Future<void> _openShareBottomSheet({
+    required BattleSetupState setup,
+    required BattleTick tick,
+    required BattleSeriesData data,
+  }) async {
+    if (data.valuesA.length < 2 || data.valuesB.length < 2 || !mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('공유할 데이터가 부족합니다.')));
+      return;
+    }
+
+    final BattleSharePayload payload = _buildBattleSharePayload(setup: setup, tick: tick, data: data);
+    final ShareService shareService = const ShareService();
+    final GlobalKey boundaryKey = GlobalKey();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B22),
+      builder: (BuildContext sheetContext) {
+        bool isSharing = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            Future<void> onSharePressed() async {
+              setModalState(() => isSharing = true);
+              try {
+                await shareService.shareBattleCard(boundaryKey, payload, preferShortText: true);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')));
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() => isSharing = false);
+                }
+              }
+            }
+
+            Future<void> onCopyLinkPressed() async {
+              final String message = await ShareLinkService.copyAppLink();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    BattleShareCard(boundaryKey: boundaryKey, payload: payload),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSharing ? null : onSharePressed,
+                        icon: isSharing
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.share),
+                        label: const Text('이미지 공유하기'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onCopyLinkPressed,
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('한번 해봐 (링크 복사)'),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '카톡은 링크가 같이 안 붙을 수 있어요. 아래 버튼으로 링크를 복사해 붙여넣어 주세요.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showResultDialog({required BattleTick tick, required BattleSetupState setup, required BattleSeriesData data}) async {
+
     if (_resultDialogShown || !mounted) return;
     _resultDialogShown = true;
 
@@ -270,6 +479,30 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('종료'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: const Color(0xFF6AA8FF).withOpacity(0.34),
+                        blurRadius: 18,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: FilledButton.icon(
+                    onPressed: () => _openShareBottomSheet(setup: setup, tick: tick, data: data),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 52),
+                      backgroundColor: const Color(0xFF3B82F6),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.share_rounded),
+                    label: const Text('이미지 공유하기'),
                   ),
                 ),
               ],
@@ -320,6 +553,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
 
             final double leadGap = (tick.returnA - tick.returnB).abs();
             final double gauge = (50 + ((tick.returnA - tick.returnB).clamp(-20, 20) * 2.5)).clamp(0, 100) / 100;
+            _tryAutoShowResult(playback: playback, data: data, setup: setup);
 
             return Stack(
             children: <Widget>[
@@ -458,29 +692,50 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
                       builder: (BuildContext context, DateTime? unlockUntil, _) {
                         final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
 
-                        return SegmentedButton<double>(
-                          segments: <ButtonSegment<double>>[
-                            const ButtonSegment<double>(value: 0.5, label: Text('0.5x')),
-                            const ButtonSegment<double>(value: 1, label: Text('1x')),
-                            const ButtonSegment<double>(value: 2, label: Text('2x')),
-                            const ButtonSegment<double>(value: 4, label: Text('4x')),
-                            ButtonSegment<double>(
-                              value: 8,
-                              icon: Icon(
-                                is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                                size: 16,
-                                color: is8xUnlocked ? null : const Color(0xFF8B8B96),
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x3347A2FF),
+                                blurRadius: 16,
+                                spreadRadius: 0.7,
+                                offset: Offset(0, 4),
                               ),
-                              label: Text(
-                                '8x',
-                                style: TextStyle(color: is8xUnlocked ? null : const Color(0xFF8B8B96)),
+                              BoxShadow(
+                                color: Color(0x1F8CCBFF),
+                                blurRadius: 24,
+                                spreadRadius: 1.2,
                               ),
-                            ),
-                          ],
-                          selected: <double>{playback.speed},
-                          onSelectionChanged: (Set<double> value) {
-                            _onSpeedSelected(value.first);
-                          },
+                            ],
+                          ),
+                          child: SegmentedButton<double>(
+                            style: _speedSegmentStyle(context),
+                            showSelectedIcon: false,
+                            segments: <ButtonSegment<double>>[
+                              ButtonSegment<double>(value: 0.5, label: _speedTextLabel(context, '0.5x')),
+                              ButtonSegment<double>(value: 1, label: _speedTextLabel(context, '1x')),
+                              ButtonSegment<double>(value: 2, label: _speedTextLabel(context, '2x')),
+                              ButtonSegment<double>(value: 4, label: _speedTextLabel(context, '4x')),
+                              ButtonSegment<double>(
+                                value: 8,
+                                icon: Icon(
+                                  is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                                  size: 15,
+                                  color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                                ),
+                                label: _speedTextLabel(
+                                  context,
+                                  '8x',
+                                  color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                                ),
+                              ),
+                            ],
+                            selected: <double>{playback.speed},
+                            onSelectionChanged: (Set<double> value) {
+                              _onSpeedSelected(value.first);
+                            },
+                          ),
                         );
                       },
                     ),

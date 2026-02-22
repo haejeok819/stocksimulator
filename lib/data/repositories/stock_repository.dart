@@ -16,6 +16,8 @@ class StockRepository {
   final AssetIndexGenerator _assetIndex = const AssetIndexGenerator();
   final Map<String, List<StockModel>> _stockCache = <String, List<StockModel>>{};
   final Map<String, List<int>> _tradingDaysCache = <String, List<int>>{};
+  static final RegExp _code6Pattern = RegExp(r'^\d{6}$');
+  static final RegExp _code6ExtractorPattern = RegExp(r'(\d{6})');
 
   static const StockModel _goldStock = StockModel(
     ticker: 'KRX',
@@ -78,26 +80,17 @@ class StockRepository {
 
     final bool has2005 = availableYears.contains(2005);
     final int minYear = has2005 ? 2005 : availableYears.first;
-    final int maxYear = availableYears.last;
+    final List<int> targetYears = availableYears.where((int year) => year >= minYear).toList();
 
     final Set<int> mergedDays = <int>{};
-    for (int year = minYear; year <= maxYear; year++) {
+    for (final int year in targetYears) {
       try {
         final Object? decoded = await _priceRepository.loadYearDataByAsset(
           assetType: assetType,
           assetKey: assetKey,
           year: year,
         );
-        if (decoded is! List<Object?>) {
-          continue;
-        }
-
-        for (final List<Object?> row in decoded.whereType<List<Object?>>()) {
-          if (row.length < 2) {
-            continue;
-          }
-          mergedDays.add((row[0] as num).toInt());
-        }
+        _collectTradingDays(decoded, mergedDays);
       } catch (error) {
         debugPrint('Trading day scan skipped: assetType=$assetType, assetKey=$assetKey, year=$year ($error)');
       }
@@ -342,20 +335,47 @@ class StockRepository {
 
   String? _normalizeKrCode6(Map<String, dynamic> row) {
     final String code6 = (row['code6'] as String? ?? '').trim();
-    if (RegExp(r'^\d{6}$').hasMatch(code6)) {
+    if (_code6Pattern.hasMatch(code6)) {
       return code6;
     }
 
     final String ticker = (row['ticker'] as String? ?? '').trim();
     if (ticker.contains('.')) {
       final String left = ticker.split('.').first.trim();
-      if (RegExp(r'^\d{6}$').hasMatch(left)) {
+      if (_code6Pattern.hasMatch(left)) {
         return left;
       }
     }
 
-    final RegExpMatch? match = RegExp(r'(\d{6})').firstMatch(ticker);
+    final RegExpMatch? match = _code6ExtractorPattern.firstMatch(ticker);
     return match?.group(1);
+  }
+
+  void _collectTradingDays(Object? decoded, Set<int> mergedDays) {
+    if (decoded is! List<Object?>) {
+      return;
+    }
+
+    for (final List<Object?> row in decoded.whereType<List<Object?>>()) {
+      if (row.length < 2) {
+        continue;
+      }
+
+      final int? ymd = _toYmd(row.first);
+      if (ymd != null) {
+        mergedDays.add(ymd);
+      }
+    }
+  }
+
+  int? _toYmd(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
   }
 
 }
