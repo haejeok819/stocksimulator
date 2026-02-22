@@ -20,14 +20,20 @@ class ShareService {
     GlobalKey boundaryKey,
     SimulationSharePayload payload, {
     double pixelRatio = defaultPixelRatio,
+    bool preferShortText = false,
   }) async {
-    final String shareText = ShareTextComposer.simulation(
-      assetName: payload.title,
-      percentReturn: payload.returnText,
-      initialValue: payload.investText,
-      finalValue: payload.finalText,
-      dateRange: payload.periodText,
-    );
+    final String shareText = preferShortText
+        ? ShareTextComposer.simulationShort(
+            assetName: payload.title,
+            percentReturn: payload.returnText,
+          )
+        : ShareTextComposer.simulation(
+            assetName: payload.title,
+            percentReturn: payload.returnText,
+            initialValue: payload.investText,
+            finalValue: payload.finalText,
+            dateRange: payload.periodText,
+          );
 
     await _shareWithBoundary(
       boundaryKey: boundaryKey,
@@ -41,14 +47,21 @@ class ShareService {
     GlobalKey boundaryKey,
     BattleSharePayload payload, {
     double pixelRatio = defaultPixelRatio,
+    bool preferShortText = false,
   }) async {
-    final String shareText = ShareTextComposer.battle(
-      assetAName: payload.assetAName,
-      assetBName: payload.assetBName,
-      assetAReturn: payload.assetAReturnText,
-      assetBReturn: payload.assetBReturnText,
-      winnerLabel: payload.winnerLabel,
-    );
+    final String shareText = preferShortText
+        ? ShareTextComposer.battleShort(
+            assetAName: payload.assetAName,
+            assetBName: payload.assetBName,
+            winnerLabel: payload.winnerLabel,
+          )
+        : ShareTextComposer.battle(
+            assetAName: payload.assetAName,
+            assetBName: payload.assetBName,
+            assetAReturn: payload.assetAReturnText,
+            assetBReturn: payload.assetBReturnText,
+            winnerLabel: payload.winnerLabel,
+          );
 
     await _shareWithBoundary(
       boundaryKey: boundaryKey,

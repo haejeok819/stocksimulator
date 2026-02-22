@@ -99,6 +99,30 @@ class ShareTextComposer {
     return _pickTemplate(templates);
   }
 
+
+  static String simulationShort({
+    required String assetName,
+    required String percentReturn,
+  }) {
+    final List<String> templates = <String>[
+      '$assetName $percentReturn\n앱에서 직접 해보기 👇\n$appLink',
+      '그때 샀다면… $assetName $percentReturn\n$appLink',
+    ];
+    return _pickTemplate(templates);
+  }
+
+  static String battleShort({
+    required String assetAName,
+    required String assetBName,
+    required String winnerLabel,
+  }) {
+    final List<String> templates = <String>[
+      '$assetAName vs $assetBName\n승자: $winnerLabel\n$appLink',
+      '너라면 뭐 샀어?\n$assetAName vs $assetBName\n$appLink',
+    ];
+    return _pickTemplate(templates);
+  }
+
   static String randomCuriosityLine() {
     const List<String> candidates = <String>[
       '너라면 뭐 골라?',
