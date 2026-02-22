@@ -38,9 +38,13 @@ dependencies:
   archive: ^4.0.8
   flutter_riverpod: ^2.5.1
   intl: ^0.19.0
-  share_plus: ^10.0.2
+  share_plus: ^12.0.1
   path_provider: ^2.1.4
   shared_preferences: ^2.3.2
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  google_sign_in: ^6.2.1
+  cloud_firestore: ^5.4.4
 flutter_launcher_icons:
   android: true
   ios: true
@@ -93,3 +97,14 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+dependency_overrides:
+  # Windows 빌드에서 Firebase C++ 정적 링크 충돌을 피하기 위해
+  # Windows 플랫폼 선언을 제거한 로컬 fork를 사용한다.
+  firebase_core:
+    path: third_party/firebase_core_nowindows
+  firebase_auth:
+    path: third_party/firebase_auth_nowindows
+  cloud_firestore:
+    path: third_party/cloud_firestore_nowindows

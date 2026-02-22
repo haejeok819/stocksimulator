@@ -1,11 +1,17 @@
-import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:stocksimulator/shared/services/firebase_runtime.dart';
 
 Future<void> bootstrapFirebase() async {
-  // Windows desktop build must not link Firebase native plugins.
-  if (Platform.isWindows) {
+  if (kIsWeb || defaultTargetPlatform == TargetPlatform.windows) {
+    FirebaseRuntime.isReady = false;
     return;
   }
 
-  // Firebase initialization intentionally disabled here until
-  // platform-specific Firebase plugin linkage is reintroduced safely.
+  try {
+    await Firebase.initializeApp();
+    FirebaseRuntime.isReady = true;
+  } catch (_) {
+    FirebaseRuntime.isReady = false;
+  }
 }

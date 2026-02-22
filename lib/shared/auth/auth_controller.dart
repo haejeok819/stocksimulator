@@ -16,9 +16,18 @@ class AuthController extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final AuthUser? user = await _repository.getCurrentUser();
-      state = state.copyWith(isLoading: false, user: user, clearUser: user == null, clearError: true);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, clearUser: true, errorMessage: '로그인 상태를 불러오지 못했습니다.');
+      state = state.copyWith(
+        isLoading: false,
+        user: user,
+        clearUser: user == null,
+        clearError: true,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        clearUser: true,
+        errorMessage: _toMessage(error, fallback: '로그인 상태를 불러오지 못했습니다.'),
+      );
     }
   }
 
@@ -33,9 +42,20 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       await _repository.signOut();
       state = state.copyWith(isLoading: false, clearUser: true, clearError: true);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, errorMessage: '로그아웃에 실패했습니다.');
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _toMessage(error, fallback: '로그아웃에 실패했습니다.'),
+      );
     }
+  }
+
+  String _toMessage(Object error, {required String fallback}) {
+    final String raw = error.toString();
+    if (raw.startsWith('Exception: ')) {
+      return raw.replaceFirst('Exception: ', '');
+    }
+    return raw.isEmpty ? fallback : raw;
   }
 
   Future<void> _performSignIn(Future<AuthUser> Function() action) async {
@@ -43,8 +63,11 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       final AuthUser user = await action();
       state = state.copyWith(isLoading: false, user: user, clearError: true);
-    } catch (_) {
-      state = state.copyWith(isLoading: false, errorMessage: '로그인에 실패했습니다.');
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _toMessage(error, fallback: '로그인에 실패했습니다.'),
+      );
     }
   }
 }
