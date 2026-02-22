@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/prices/price_repository.dart';
+import 'package:stocksimulator/data/models/price_year_data.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 
 class _FakePriceRepository extends PriceRepository {
@@ -51,5 +52,38 @@ void main() {
 
     expect(fake.requestedYears, <int>[2005, 2007]);
     expect(days, <int>[20050103, 20070102]);
+  });
+
+  test('toSimulationSeries returns empty for zero or negative investment', () {
+    final StockRepository repository = StockRepository(
+      priceRepository: _FakePriceRepository(
+        years: <int>[],
+        yearData: <int, Object?>{},
+      ),
+    );
+
+    const List<PricePoint> prices = <PricePoint>[
+      PricePoint(ymd: 20240101, close: 100),
+      PricePoint(ymd: 20240102, close: 110),
+    ];
+
+    expect(repository.toSimulationSeries(prices: prices, investment: 0), isEmpty);
+    expect(repository.toSimulationSeries(prices: prices, investment: -10000), isEmpty);
+  });
+
+  test('toSimulationSeries returns empty when first close is not positive', () {
+    final StockRepository repository = StockRepository(
+      priceRepository: _FakePriceRepository(
+        years: <int>[],
+        yearData: <int, Object?>{},
+      ),
+    );
+
+    const List<PricePoint> prices = <PricePoint>[
+      PricePoint(ymd: 20240101, close: 0),
+      PricePoint(ymd: 20240102, close: 110),
+    ];
+
+    expect(repository.toSimulationSeries(prices: prices, investment: 1000000), isEmpty);
   });
 }

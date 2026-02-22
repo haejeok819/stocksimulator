@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/shared/auth/auth_controller.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
 import 'package:stocksimulator/shared/auth/auth_state.dart';
+import 'package:stocksimulator/shared/services/firebase_runtime.dart';
 
 class RecordsLoginGate extends ConsumerWidget {
   const RecordsLoginGate({super.key});
@@ -14,6 +15,7 @@ class RecordsLoginGate extends ConsumerWidget {
     final AuthController controller = ref.read(authControllerProvider.notifier);
 
     final bool isWindows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    final bool isFirebaseMode = FirebaseRuntime.isReady;
 
     return Center(
       child: Padding(
@@ -35,11 +37,21 @@ class RecordsLoginGate extends ConsumerWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              _SignInButton(label: '카카오로 로그인', onPressed: state.isLoading ? null : controller.signInWithKakao),
+              _SignInButton(
+                label: '카카오로 로그인',
+                onPressed: state.isLoading
+                    ? null
+                    : () => _onKakaoTap(context, controller, isFirebaseMode),
+              ),
               const SizedBox(height: 8),
               _SignInButton(label: '구글로 로그인', onPressed: state.isLoading ? null : controller.signInWithGoogle),
               const SizedBox(height: 8),
-              _SignInButton(label: '네이버로 로그인', onPressed: state.isLoading ? null : controller.signInWithNaver),
+              _SignInButton(
+                label: '네이버로 로그인',
+                onPressed: state.isLoading
+                    ? null
+                    : () => _onNaverTap(context, controller, isFirebaseMode),
+              ),
             ],
             if (state.isLoading && !isWindows) ...<Widget>[
               const SizedBox(height: 16),
@@ -54,6 +66,29 @@ class RecordsLoginGate extends ConsumerWidget {
       ),
     );
   }
+
+  void _onKakaoTap(BuildContext context, AuthController controller, bool isFirebaseMode) {
+    if (isFirebaseMode) {
+      _showPreparingMessage(context);
+      return;
+    }
+    controller.signInWithKakao();
+  }
+
+  void _onNaverTap(BuildContext context, AuthController controller, bool isFirebaseMode) {
+    if (isFirebaseMode) {
+      _showPreparingMessage(context);
+      return;
+    }
+    controller.signInWithNaver();
+  }
+
+  void _showPreparingMessage(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('준비중입니다. 구글 로그인을 이용해주세요.')),
+    );
+  }
+
 }
 
 class _SignInButton extends StatelessWidget {
