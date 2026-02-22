@@ -1,5 +1,38 @@
-// FlutterFire CLI(`flutterfire configure`) 실행 시 이 파일이 자동 생성됩니다.
-// 현재 저장소에서는 런타임에서 Firebase.initializeApp() 기본 경로를 사용합니다.
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
 class DefaultFirebaseOptions {
-  const DefaultFirebaseOptions._();
+  DefaultFirebaseOptions._();
+
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      throw UnsupportedError('DefaultFirebaseOptions are not configured for web.');
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      case TargetPlatform.iOS:
+        return ios;
+      default:
+        throw UnsupportedError('DefaultFirebaseOptions are not configured for this platform.');
+    }
+  }
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'YOUR_ANDROID_API_KEY',
+    appId: 'YOUR_ANDROID_APP_ID',
+    messagingSenderId: 'YOUR_ANDROID_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_ANDROID_PROJECT_ID',
+    storageBucket: 'YOUR_ANDROID_STORAGE_BUCKET',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'YOUR_IOS_API_KEY',
+    appId: 'YOUR_IOS_APP_ID',
+    messagingSenderId: 'YOUR_IOS_MESSAGING_SENDER_ID',
+    projectId: 'YOUR_IOS_PROJECT_ID',
+    storageBucket: 'YOUR_IOS_STORAGE_BUCKET',
+    iosBundleId: 'YOUR_IOS_BUNDLE_ID',
+  );
 }
