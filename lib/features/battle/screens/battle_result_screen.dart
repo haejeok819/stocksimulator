@@ -6,6 +6,7 @@ import 'package:stocksimulator/features/battle/state/battle_providers.dart';
 import 'package:stocksimulator/features/records/models/attempt_record.dart';
 import 'package:stocksimulator/features/records/state/records_providers.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
+import 'package:stocksimulator/shared/share/services/share_link_service.dart';
 import 'package:stocksimulator/shared/share/services/share_service.dart';
 import 'package:stocksimulator/shared/share/share_payload.dart';
 import 'package:stocksimulator/shared/share/widgets/share_card.dart';
@@ -167,7 +168,7 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
                 isSharing = true;
               });
               try {
-                await shareService.shareBattleCard(boundaryKey, payload);
+                await shareService.shareBattleCard(boundaryKey, payload, preferShortText: true);
               } catch (_) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')));
@@ -178,6 +179,13 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
                     isSharing = false;
                   });
                 }
+              }
+            }
+
+            Future<void> onCopyLinkPressed() async {
+              final String message = await ShareLinkService.copyAppLink();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
               }
             }
 
@@ -196,8 +204,23 @@ class _BattleResultScreenState extends ConsumerState<BattleResultScreen> {
                         icon: isSharing
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.share),
-                        label: const Text('공유하기'),
+                        label: const Text('이미지 공유하기'),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onCopyLinkPressed,
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('한번 해봐 (링크 복사)'),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '카톡은 링크가 같이 안 붙을 수 있어요. 아래 버튼으로 링크를 복사해 붙여넣어 주세요.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),

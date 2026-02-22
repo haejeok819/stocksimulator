@@ -14,6 +14,7 @@ import 'package:stocksimulator/shared/auth/auth_providers.dart';
 import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
+import 'package:stocksimulator/shared/share/services/share_link_service.dart';
 import 'package:stocksimulator/shared/share/services/share_service.dart';
 import 'package:stocksimulator/shared/share/share_payload.dart';
 import 'package:stocksimulator/shared/share/widgets/share_card.dart';
@@ -797,7 +798,7 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                 isSharing = true;
               });
               try {
-                await shareService.shareSimulationCard(boundaryKey, payload);
+                await shareService.shareSimulationCard(boundaryKey, payload, preferShortText: true);
               } catch (_) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -810,6 +811,13 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                     isSharing = false;
                   });
                 }
+              }
+            }
+
+            Future<void> onCopyLinkPressed() async {
+              final String message = await ShareLinkService.copyAppLink();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
               }
             }
 
@@ -828,8 +836,23 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                         icon: isSharing
                             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                             : const Icon(Icons.share),
-                        label: const Text('공유하기'),
+                        label: const Text('이미지 공유하기'),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onCopyLinkPressed,
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('한번 해봐 (링크 복사)'),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '카톡은 링크가 같이 안 붙을 수 있어요. 아래 버튼으로 링크를 복사해 붙여넣어 주세요.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -1010,7 +1033,7 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
                               icon: const Icon(Icons.share_rounded),
-                              label: const Text('공유하기'),
+                              label: const Text('이미지 공유하기'),
                             ),
                           ),
                         ],
