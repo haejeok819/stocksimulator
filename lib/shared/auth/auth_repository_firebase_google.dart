@@ -11,7 +11,7 @@ class AuthRepositoryFirebaseGoogle implements AuthRepository {
     UserStore? userStore,
   })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
         _googleSignIn = googleSignIn ?? GoogleSignIn(),
-        _userStore = userStore ?? const UserStore();
+        _userStore = userStore ?? UserStore();
 
   final FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
