@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +14,7 @@ Future<void> main() async {
 
   await bootstrapFirebase(); // 모바일만 Firebase init, Windows는 noop
 
-  final bool isMobile = Platform.isAndroid || Platform.isIOS;
+  final bool isMobile = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
   final bool adsRemoved = await AdsRemovedStorage.getAdsRemoved();
   AdService.instance.setAdsRemoved(adsRemoved);
