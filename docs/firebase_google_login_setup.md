@@ -35,3 +35,21 @@ service cloud.firestore {
 ## 4) 현재 앱 정책
 - Android/iOS: 구글 로그인 실제 연동
 - Windows/Web: Firebase 로그인 미사용(기존 정책 유지)
+
+## 5) Windows 링크 에러(LNK2019/LNK2001) 대응
+Firebase C++ 정적 라이브러리 링크 에러가 나면, 이 저장소 정책상 **Windows용 Firebase 플러그인을 제외한 로컬 fork**를 사용해야 합니다.
+
+1. Pub cache에 Firebase 패키지가 존재하는 상태에서 아래 스크립트 실행
+   ```bash
+   ./scripts/prepare_firebase_nowindows_overrides.sh
+   ```
+2. `pubspec.yaml`의 `dependency_overrides`가 아래 경로를 가리키는지 확인
+   - `third_party/firebase_core_nowindows`
+   - `third_party/firebase_auth_nowindows`
+   - `third_party/cloud_firestore_nowindows`
+3. Windows 빌드 캐시 정리 후 재빌드
+   - `flutter clean`
+   - `flutter pub get`
+   - `flutter run -d windows`
+
+> 주의: 모바일(Android/iOS) 실제 로그인은 유지되고, Windows는 Firebase 네이티브 링크를 타지 않도록 설계되어 있습니다.
