@@ -12,7 +12,7 @@ class ShareService {
 
   final ShareFileService _shareFileService;
 
-  static const String _defaultFileName = 'geuttae_salggeol_result.png';
+  static const String _defaultFileName = 'share_result.png';
   static const double defaultPixelRatio = 3.0;
   static const double storyPixelRatio = 4.0;
 
@@ -21,8 +21,6 @@ class ShareService {
     SimulationSharePayload payload, {
     double pixelRatio = defaultPixelRatio,
   }) async {
-    final Uint8List imageBytes =
-        await CaptureService.capturePng(boundaryKey, pixelRatio: pixelRatio);
     final String shareText = ShareTextComposer.simulation(
       assetName: payload.title,
       percentReturn: payload.returnText,
@@ -31,7 +29,12 @@ class ShareService {
       dateRange: payload.periodText,
     );
 
-    await shareResult(imageBytes, shareText);
+    await _shareWithBoundary(
+      boundaryKey: boundaryKey,
+      text: shareText,
+      pixelRatio: pixelRatio,
+      fileName: _defaultFileName,
+    );
   }
 
   Future<void> shareBattleCard(
@@ -39,8 +42,6 @@ class ShareService {
     BattleSharePayload payload, {
     double pixelRatio = defaultPixelRatio,
   }) async {
-    final Uint8List imageBytes =
-        await CaptureService.capturePng(boundaryKey, pixelRatio: pixelRatio);
     final String shareText = ShareTextComposer.battle(
       assetAName: payload.assetAName,
       assetBName: payload.assetBName,
@@ -49,7 +50,30 @@ class ShareService {
       winnerLabel: payload.winnerLabel,
     );
 
-    await shareResult(imageBytes, shareText);
+    await _shareWithBoundary(
+      boundaryKey: boundaryKey,
+      text: shareText,
+      pixelRatio: pixelRatio,
+      fileName: _defaultFileName,
+    );
+  }
+
+  Future<void> _shareWithBoundary({
+    required GlobalKey boundaryKey,
+    required String text,
+    required double pixelRatio,
+    required String fileName,
+  }) async {
+    try {
+      final Uint8List imageBytes = await CaptureService.capturePng(
+        boundaryKey,
+        pixelRatio: pixelRatio,
+      );
+      await shareResult(imageBytes, text, fileName: fileName);
+    } catch (_) {
+      // 이미지 캡처/저장 실패 시 텍스트만 공유 폴백
+      await _shareTextOnly(text);
+    }
   }
 
   Future<void> shareResult(
@@ -57,11 +81,26 @@ class ShareService {
     String text, {
     String fileName = _defaultFileName,
   }) async {
-    final XFile imageFile = await _shareFileService.saveTempPng(
-      imageBytes,
-      prefix: 'result_share',
-      fileName: fileName,
-    );
-    await Share.shareXFiles(<XFile>[imageFile], text: text);
+    try {
+      final XFile imageFile = await _shareFileService.saveTempPng(
+        imageBytes,
+        prefix: 'result_share',
+        fileName: fileName,
+      );
+
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          files: <XFile>[imageFile],
+        ),
+      );
+    } catch (_) {
+      // 최신 API 또는 파일 공유 실패 시 텍스트만 공유
+      await _shareTextOnly(text);
+    }
+  }
+
+  Future<void> _shareTextOnly(String text) async {
+    await SharePlus.instance.share(ShareParams(text: text));
   }
 }
