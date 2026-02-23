@@ -27,16 +27,29 @@ class PriceFileDataSource {
       final ByteData bytes = await rootBundle.load(path);
       final List<int> decoded = GZipDecoder().decodeBytes(bytes.buffer.asUint8List());
       final dynamic parsed = jsonDecode(utf8.decode(decoded));
-      final List<PricePoint> points = (parsed as List<dynamic>)
-          .whereType<List<dynamic>>()
-          .where((List<dynamic> row) => row.length >= 2)
-          .map(
-            (List<dynamic> row) => PricePoint(
-              ymd: (row[0] as num).toInt(),
-              close: (row[1] as num).toDouble(),
-            ),
-          )
-          .toList();
+      final List<dynamic> rows = parsed as List<dynamic>;
+      final List<PricePoint> points = <PricePoint>[];
+      points.length = rows.length;
+      int writeIndex = 0;
+      for (final dynamic rawRow in rows) {
+        if (rawRow is! List<dynamic> || rawRow.length < 2) {
+          continue;
+        }
+
+        final dynamic ymdRaw = rawRow[0];
+        final dynamic closeRaw = rawRow[1];
+        if (ymdRaw is! num || closeRaw is! num) {
+          continue;
+        }
+
+        points[writeIndex++] = PricePoint(
+          ymd: ymdRaw.toInt(),
+          close: closeRaw.toDouble(),
+        );
+      }
+      if (writeIndex != points.length) {
+        points.length = writeIndex;
+      }
 
       _cache.write(market: market, ticker: ticker, year: year, points: points);
       return points;
