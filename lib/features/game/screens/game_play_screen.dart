@@ -145,12 +145,15 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
       final bool isMobile = !kIsWeb &&
           (defaultTargetPlatform == TargetPlatform.android ||
               defaultTargetPlatform == TargetPlatform.iOS);
-      if (isMobile && !isWindowsGuest && flow.finalValue != null) {
-        try {
-          await ref
-              .read(gamePointControllerProvider.notifier)
-              .earnGameResult(flow.finalValue!.round());
-        } catch (_) {}
+      if (isMobile && !isWindowsGuest) {
+        final int deltaPoints = flow.settlementDeltaPoints ?? 0;
+        if (deltaPoints != 0) {
+          try {
+            await ref
+                .read(gamePointControllerProvider.notifier)
+                .earnGameResult(deltaPoints);
+          } catch (_) {}
+        }
       }
     }
 

@@ -22,13 +22,26 @@ class ChartGameResultDialog extends StatelessWidget {
     return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
+  String _formatSignedPercent(double value) {
+    final String sign = value >= 0 ? '+' : '';
+    return '$sign${value.toStringAsFixed(2)}%';
+  }
+
+  String _formatSignedPoints(int value) {
+    final String sign = value >= 0 ? '+' : '';
+    return '$sign${AppNumberFormat.formatInt(value)}P';
+  }
+
   @override
   Widget build(BuildContext context) {
     final double finalValue = flow.finalValue ?? flow.equityPoints;
-    final double finalReturn = flow.finalReturnPercent ?? 0;
     final double finalPnl = finalValue - flow.initialBetPoints;
     final int startYmd = flow.segment.isNotEmpty ? flow.segment.first.ymd : 0;
     final int endYmd = flow.segment.isNotEmpty ? flow.segment.last.ymd : 0;
+    final double myReturn = flow.finalReturnPercent ?? 0;
+    final double marketReturn = flow.marketReturnPercent ?? 0;
+    final double relativeReturn = flow.relativeReturnPercent ?? 0;
+    final int settlementDelta = flow.settlementDeltaPoints ?? 0;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -82,16 +95,17 @@ class ChartGameResultDialog extends StatelessWidget {
                 fontSize: 34,
               ),
             ),
-            Text(
-              '${finalReturn >= 0 ? '+' : ''}${finalReturn.toStringAsFixed(2)}%',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: finalReturn >= 0 ? Colors.white : AppColors.upSegment,
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-              ),
-            ),
+            const SizedBox(height: 8),
+            _MetricLine(label: '내 수익률', value: _formatSignedPercent(myReturn)),
             const SizedBox(height: 4),
+            _MetricLine(label: '시장 수익률', value: _formatSignedPercent(marketReturn)),
+            const SizedBox(height: 4),
+            _MetricLine(
+              label: '상대 수익률',
+              value: '${_formatSignedPercent(relativeReturn)} (정산: ${_formatSignedPoints(settlementDelta)})',
+              valueColor: relativeReturn >= 0 ? AppColors.action : AppColors.downSegment,
+            ),
+            const SizedBox(height: 8),
             Text(
               '최종 손익 ${finalPnl >= 0 ? '+' : ''}${AppNumberFormat.formatInt(finalPnl)}P',
               textAlign: TextAlign.center,
@@ -121,6 +135,40 @@ class ChartGameResultDialog extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MetricLine extends StatelessWidget {
+  const _MetricLine({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            '$label:',
+            style: const TextStyle(color: AppColors.helperText, fontSize: 12),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor ?? Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

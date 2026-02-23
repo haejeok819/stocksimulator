@@ -18,6 +18,9 @@ class ChartGameFlowState {
     required this.isFinished,
     required this.finalValue,
     required this.finalReturnPercent,
+    required this.marketReturnPercent,
+    required this.relativeReturnPercent,
+    required this.settlementDeltaPoints,
     required this.sellUnlockAt,
     required this.assetId,
     required this.assetName,
@@ -38,6 +41,9 @@ class ChartGameFlowState {
         isFinished = false,
         finalValue = null,
         finalReturnPercent = null,
+        marketReturnPercent = null,
+        relativeReturnPercent = null,
+        settlementDeltaPoints = null,
         sellUnlockAt = null,
         assetId = null,
         assetName = null,
@@ -56,6 +62,9 @@ class ChartGameFlowState {
   final bool isFinished;
   final double? finalValue;
   final double? finalReturnPercent;
+  final double? marketReturnPercent;
+  final double? relativeReturnPercent;
+  final int? settlementDeltaPoints;
   final DateTime? sellUnlockAt;
 
   final String? assetId;
@@ -78,6 +87,12 @@ class ChartGameFlowState {
     bool clearFinalValue = false,
     double? finalReturnPercent,
     bool clearFinalReturnPercent = false,
+    double? marketReturnPercent,
+    bool clearMarketReturnPercent = false,
+    double? relativeReturnPercent,
+    bool clearRelativeReturnPercent = false,
+    int? settlementDeltaPoints,
+    bool clearSettlementDeltaPoints = false,
     DateTime? sellUnlockAt,
     bool clearSellUnlockAt = false,
     String? assetId,
@@ -104,6 +119,14 @@ class ChartGameFlowState {
       finalValue: clearFinalValue ? null : (finalValue ?? this.finalValue),
       finalReturnPercent:
           clearFinalReturnPercent ? null : (finalReturnPercent ?? this.finalReturnPercent),
+      marketReturnPercent:
+          clearMarketReturnPercent ? null : (marketReturnPercent ?? this.marketReturnPercent),
+      relativeReturnPercent: clearRelativeReturnPercent
+          ? null
+          : (relativeReturnPercent ?? this.relativeReturnPercent),
+      settlementDeltaPoints: clearSettlementDeltaPoints
+          ? null
+          : (settlementDeltaPoints ?? this.settlementDeltaPoints),
       sellUnlockAt: clearSellUnlockAt ? null : (sellUnlockAt ?? this.sellUnlockAt),
       assetId: clearAssetId ? null : (assetId ?? this.assetId),
       assetName: clearAssetName ? null : (assetName ?? this.assetName),
@@ -141,6 +164,9 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       isFinished: false,
       clearFinalValue: true,
       clearFinalReturnPercent: true,
+      clearMarketReturnPercent: true,
+      clearRelativeReturnPercent: true,
+      clearSettlementDeltaPoints: true,
       clearSellUnlockAt: true,
       clearAssetId: true,
       clearAssetName: true,
@@ -202,6 +228,9 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
         isFinished: false,
         clearFinalValue: true,
         clearFinalReturnPercent: true,
+        clearMarketReturnPercent: true,
+        clearRelativeReturnPercent: true,
+        clearSettlementDeltaPoints: true,
         clearSellUnlockAt: true,
       );
     } catch (_) {
@@ -268,7 +297,13 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
 
     final double initial = state.initialBetPoints.toDouble();
     final double finalValue = cash;
-    final double finalReturn = initial <= 0 ? 0 : ((finalValue / initial) - 1) * 100;
+    final double myReturn = initial > 0 ? ((finalValue / initial) - 1) : 0;
+    final double firstClose = state.segment.first.close;
+    final double marketReturn = firstClose > 0 ? ((lastPrice / firstClose) - 1) : 0;
+    final double relativeReturn = (initial > 0 && finalValue > 0) ? (myReturn - marketReturn) : 0;
+    final int settlementDelta = (initial > 0 && finalValue > 0)
+        ? (initial * relativeReturn).round()
+        : 0;
 
     state = state.copyWith(
       currentIndex: lastIndex,
@@ -278,7 +313,10 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       equityPoints: finalValue,
       isFinished: true,
       finalValue: finalValue,
-      finalReturnPercent: finalReturn,
+      finalReturnPercent: myReturn * 100,
+      marketReturnPercent: marketReturn * 100,
+      relativeReturnPercent: relativeReturn * 100,
+      settlementDeltaPoints: settlementDelta,
       clearSellUnlockAt: true,
     );
   }

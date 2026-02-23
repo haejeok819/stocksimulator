@@ -5,9 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/features/game/screens/bet_points_input_screen.dart';
 import 'package:stocksimulator/features/game/state/game_point_providers.dart';
-import 'package:stocksimulator/features/game/widgets/game_ledger_item.dart';
+import 'package:stocksimulator/features/game/widgets/chart_game_rule_dialog.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
-import 'package:stocksimulator/shared/models/game_point_ledger_entry.dart';
 import 'package:stocksimulator/shared/models/game_wallet.dart';
 import 'package:stocksimulator/shared/services/game_point_service.dart';
 import 'package:stocksimulator/shared/utils/date_key.dart';
@@ -47,7 +46,6 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     final AsyncValue<void> actionState = ref.watch(gamePointControllerProvider);
     final bool isActionLoading = actionState.isLoading;
     final GameWallet? wallet = ref.watch(gameWalletProvider).valueOrNull;
-    final AsyncValue<List<GamePointLedgerEntry>> ledgerAsync = ref.watch(gameLedgerProvider);
     final bool isCheckingInToday = wallet?.lastCheckInDate == DateKey.kstYmd();
     final bool hasPermissionIssue = actionState.hasError &&
         actionState.error.toString().contains('permission-denied');
@@ -96,38 +94,7 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
               onTap: () => _onGameEntryTap(isLoggedIn: isLoggedIn, isWindowsGuest: isWindowsGuest),
             ),
             const SizedBox(height: 18),
-            const Text(
-              '최근 내역',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-            ),
-            const SizedBox(height: 10),
-            if (!isLoggedIn)
-              _LedgerPlaceholder(
-                text: isWindowsGuest
-                    ? '게스트 플레이는 저장되지 않습니다.'
-                    : '로그인 후 플레이 기록을 확인할 수 있어요.',
-              )
-            else
-              ledgerAsync.when(
-                data: (List<GamePointLedgerEntry> entries) {
-                  if (entries.isEmpty) return const _LedgerPlaceholder(text: '아직 내역이 없어요.');
-                  return Column(
-                    children: entries
-                        .map((GamePointLedgerEntry e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: GameLedgerItem(entry: e),
-                            ))
-                        .toList(growable: false),
-                  );
-                },
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                error: (_, __) => const _LedgerPlaceholder(text: '네트워크 오류가 발생했어요.'),
-              ),
+            GameRuleSummaryCard(onTap: _showRuleDialog),
           ],
         ),
       ),
@@ -181,6 +148,15 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
           currentBalance: currentBalance,
         ),
       ),
+    );
+  }
+
+
+  Future<void> _showRuleDialog() {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const ChartGameRuleDialog(),
     );
   }
 
@@ -429,22 +405,56 @@ class _ChartGameCtaCard extends StatelessWidget {
   }
 }
 
-class _LedgerPlaceholder extends StatelessWidget {
-  const _LedgerPlaceholder({required this.text});
 
-  final String text;
+class GameRuleSummaryCard extends StatelessWidget {
+  const GameRuleSummaryCard({super.key, required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.background.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.helperText.withOpacity(0.18)),
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(15),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '게임 규칙',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      '정산: 시장 대비 초과/미달분만 반영',
+                      style: TextStyle(color: AppColors.helperText, fontSize: 12.5),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '승리: 시장 수익률보다 높으면 + / 낮으면 -',
+                      style: TextStyle(color: AppColors.helperText, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, color: AppColors.helperText.withOpacity(0.95)),
+            ],
+          ),
+        ),
       ),
-      child: Text(text, style: const TextStyle(color: AppColors.helperText, fontSize: 12)),
     );
   }
 }
