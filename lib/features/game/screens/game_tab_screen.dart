@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,10 +35,10 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
       Future<void>.microtask(() async {
         try {
           await ref.read(gamePointControllerProvider.notifier).initIfNeeded();
-        } catch (_) {
+        } catch (error) {
           if (!mounted) return;
           ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('네트워크 오류가 발생했어요')));
+              .showSnackBar(SnackBar(content: Text(_resolveActionErrorMessage(error))));
         }
       });
     }
@@ -131,8 +132,8 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
       _showMessage('+${GamePointService.checkInReward}P 출석체크 완료!');
     } on AlreadyCheckedInException {
       _showMessage('오늘은 이미 출석체크 했어요');
-    } catch (_) {
-      _showMessage('네트워크 오류가 발생했어요');
+    } catch (error) {
+      _showMessage(_resolveActionErrorMessage(error));
     }
   }
 
@@ -144,8 +145,8 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     try {
       await ref.read(gamePointControllerProvider.notifier).claimAdReward();
       _showMessage('+${GamePointService.adRewardPoints}P 지급됐어요');
-    } catch (_) {
-      _showMessage('네트워크 오류가 발생했어요');
+    } catch (error) {
+      _showMessage(_resolveActionErrorMessage(error));
     }
   }
 
@@ -165,6 +166,17 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
         ),
       ),
     );
+  }
+
+  String _resolveActionErrorMessage(Object error) {
+    if (error is AlreadyCheckedInException) return '오늘은 이미 출석체크 했어요';
+    if (error is FirebaseException) {
+      if (error.code == 'permission-denied') return '권한 설정을 확인해주세요';
+      if (error.code == 'unavailable') return '네트워크 상태를 확인해주세요';
+    }
+    final String text = error.toString();
+    if (text.contains('로그인 후 이용할 수 있어요')) return '로그인 후 이용할 수 있어요';
+    return '네트워크 오류가 발생했어요';
   }
 
   void _showMessage(String text) {

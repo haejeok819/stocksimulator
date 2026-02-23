@@ -11,7 +11,8 @@ import 'package:stocksimulator/shared/services/game_point_service.dart';
 
 final Provider<GamePointService> gamePointServiceProvider = Provider<GamePointService>((Ref ref) {
   final bool isSupportedPlatform = !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
   if (!FirebaseRuntime.isReady || !isSupportedPlatform) {
     return GamePointService();
   }
@@ -27,7 +28,11 @@ final StreamProvider<GameWallet?> gameWalletProvider = StreamProvider<GameWallet
 final StreamProvider<List<GamePointLedgerEntry>> gameLedgerProvider =
     StreamProvider<List<GamePointLedgerEntry>>((Ref ref) {
   final String? uid = ref.watch(authControllerProvider).user?.uid;
-  if (uid == null || uid.isEmpty) return Stream<List<GamePointLedgerEntry>>.value(const <GamePointLedgerEntry>[]);
+  if (uid == null || uid.isEmpty) {
+    return Stream<List<GamePointLedgerEntry>>.value(
+      const <GamePointLedgerEntry>[],
+    );
+  }
   return ref.watch(gamePointServiceProvider).ledgerStream(uid, limit: 20);
 });
 
@@ -46,14 +51,7 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
-    state = const AsyncLoading<void>();
-    try {
-      await _service.ensureWalletInitialized(uid);
-      state = const AsyncData<void>(null);
-    } catch (error, stackTrace) {
-      state = AsyncError<void>(error, stackTrace);
-      rethrow;
-    }
+    await _runAction(() => _service.ensureWalletInitialized(uid));
   }
 
   Future<void> checkIn() async {
@@ -61,14 +59,11 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
-    state = const AsyncLoading<void>();
-    try {
+    await _runAction(() async {
+      // 지갑 문서 생성 타이밍 경합으로 첫 출석이 실패하지 않도록 선초기화 후 출석 처리
+      await _service.ensureWalletInitialized(uid);
       await _service.checkIn(uid);
-      state = const AsyncData<void>(null);
-    } catch (error, stackTrace) {
-      state = AsyncError<void>(error, stackTrace);
-      rethrow;
-    }
+    });
   }
 
   Future<void> claimAdReward() async {
@@ -76,14 +71,14 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
-    state = const AsyncLoading<void>();
-    try {
-      await _service.applyDelta(uid, delta: GamePointService.adRewardPoints, reason: GamePointReason.adReward);
-      state = const AsyncData<void>(null);
-    } catch (error, stackTrace) {
-      state = AsyncError<void>(error, stackTrace);
-      rethrow;
-    }
+    await _runAction(() async {
+      await _service.ensureWalletInitialized(uid);
+      await _service.applyDelta(
+        uid,
+        delta: GamePointService.adRewardPoints,
+        reason: GamePointReason.adReward,
+      );
+    });
   }
 
   Future<void> spendForGameEntry() async {
@@ -91,14 +86,14 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
-    state = const AsyncLoading<void>();
-    try {
-      await _service.applyDelta(uid, delta: -GamePointService.gameEntryCost, reason: GamePointReason.gameEntry);
-      state = const AsyncData<void>(null);
-    } catch (error, stackTrace) {
-      state = AsyncError<void>(error, stackTrace);
-      rethrow;
-    }
+    await _runAction(() async {
+      await _service.ensureWalletInitialized(uid);
+      await _service.applyDelta(
+        uid,
+        delta: -GamePointService.gameEntryCost,
+        reason: GamePointReason.gameEntry,
+      );
+    });
   }
 
   Future<void> spendForBet(int betPoints) async {
@@ -106,14 +101,15 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
-    state = const AsyncLoading<void>();
-    try {
-      await _service.applyDelta(uid, delta: -betPoints, reason: GamePointReason.bet, meta: <String, dynamic>{'betPoints': betPoints});
-      state = const AsyncData<void>(null);
-    } catch (error, stackTrace) {
-      state = AsyncError<void>(error, stackTrace);
-      rethrow;
-    }
+    await _runAction(() async {
+      await _service.ensureWalletInitialized(uid);
+      await _service.applyDelta(
+        uid,
+        delta: -betPoints,
+        reason: GamePointReason.bet,
+        meta: <String, dynamic>{'betPoints': betPoints},
+      );
+    });
   }
 
   Future<void> earnGameResult(int points) async {
@@ -121,9 +117,21 @@ class GamePointController extends AsyncNotifier<void> {
     if (uid == null || uid.isEmpty) {
       throw Exception('로그인 후 이용할 수 있어요');
     }
+    await _runAction(() async {
+      await _service.ensureWalletInitialized(uid);
+      await _service.applyDelta(
+        uid,
+        delta: points,
+        reason: GamePointReason.gameResult,
+        meta: <String, dynamic>{'finalValue': points},
+      );
+    });
+  }
+
+  Future<void> _runAction(Future<void> Function() action) async {
     state = const AsyncLoading<void>();
     try {
-      await _service.applyDelta(uid, delta: points, reason: GamePointReason.gameResult, meta: <String, dynamic>{'finalValue': points});
+      await action();
       state = const AsyncData<void>(null);
     } catch (error, stackTrace) {
       state = AsyncError<void>(error, stackTrace);
