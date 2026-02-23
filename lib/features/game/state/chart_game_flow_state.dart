@@ -18,6 +18,7 @@ class ChartGameFlowState {
     required this.isFinished,
     required this.finalValue,
     required this.finalReturnPercent,
+    required this.sellUnlockAt,
     required this.assetId,
     required this.assetName,
     required this.startIndex,
@@ -37,6 +38,7 @@ class ChartGameFlowState {
         isFinished = false,
         finalValue = null,
         finalReturnPercent = null,
+        sellUnlockAt = null,
         assetId = null,
         assetName = null,
         startIndex = null,
@@ -54,6 +56,7 @@ class ChartGameFlowState {
   final bool isFinished;
   final double? finalValue;
   final double? finalReturnPercent;
+  final DateTime? sellUnlockAt;
 
   final String? assetId;
   final String? assetName;
@@ -75,6 +78,8 @@ class ChartGameFlowState {
     bool clearFinalValue = false,
     double? finalReturnPercent,
     bool clearFinalReturnPercent = false,
+    DateTime? sellUnlockAt,
+    bool clearSellUnlockAt = false,
     String? assetId,
     bool clearAssetId = false,
     String? assetName,
@@ -99,6 +104,7 @@ class ChartGameFlowState {
       finalValue: clearFinalValue ? null : (finalValue ?? this.finalValue),
       finalReturnPercent:
           clearFinalReturnPercent ? null : (finalReturnPercent ?? this.finalReturnPercent),
+      sellUnlockAt: clearSellUnlockAt ? null : (sellUnlockAt ?? this.sellUnlockAt),
       assetId: clearAssetId ? null : (assetId ?? this.assetId),
       assetName: clearAssetName ? null : (assetName ?? this.assetName),
       startIndex: clearStartIndex ? null : (startIndex ?? this.startIndex),
@@ -135,6 +141,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       isFinished: false,
       clearFinalValue: true,
       clearFinalReturnPercent: true,
+      clearSellUnlockAt: true,
       clearAssetId: true,
       clearAssetName: true,
       clearStartIndex: true,
@@ -195,6 +202,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
         isFinished: false,
         clearFinalValue: true,
         clearFinalReturnPercent: true,
+        clearSellUnlockAt: true,
       );
     } catch (_) {
       state = state.copyWith(errorMessage: '랜덤 선택에 실패했어요', isReady: false);
@@ -225,6 +233,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       cashPoints: 0,
       hasPosition: true,
       equityPoints: equity,
+      sellUnlockAt: DateTime.now().add(const Duration(seconds: 5)),
     );
   }
 
@@ -240,6 +249,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       positionUnits: 0,
       hasPosition: false,
       equityPoints: cash,
+      clearSellUnlockAt: true,
     );
   }
 
@@ -269,6 +279,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       isFinished: true,
       finalValue: finalValue,
       finalReturnPercent: finalReturn,
+      clearSellUnlockAt: true,
     );
   }
 
