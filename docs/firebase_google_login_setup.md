@@ -31,6 +31,10 @@ service cloud.firestore {
       match /game_point_ledger/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == uid; // uid 필드를 문서 데이터에 별도 저장하지 않아도 동작
       }
+
+      match /game_point_ledger/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
   }
 }
