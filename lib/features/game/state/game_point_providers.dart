@@ -115,4 +115,19 @@ class GamePointController extends AsyncNotifier<void> {
       rethrow;
     }
   }
+
+  Future<void> earnGameResult(int points) async {
+    final String? uid = _uid;
+    if (uid == null || uid.isEmpty) {
+      throw Exception('로그인 후 이용할 수 있어요');
+    }
+    state = const AsyncLoading<void>();
+    try {
+      await _service.applyDelta(uid, delta: points, reason: GamePointReason.gameResult, meta: <String, dynamic>{'finalValue': points});
+      state = const AsyncData<void>(null);
+    } catch (error, stackTrace) {
+      state = AsyncError<void>(error, stackTrace);
+      rethrow;
+    }
+  }
 }

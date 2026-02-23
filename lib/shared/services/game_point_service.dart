@@ -11,6 +11,7 @@ class GamePointReason {
   static const String retry = 'RETRY';
   static const String bonus = 'BONUS';
   static const String bet = 'BET';
+  static const String gameResult = 'GAME_RESULT';
 }
 
 class InsufficientGamePointsException implements Exception {}

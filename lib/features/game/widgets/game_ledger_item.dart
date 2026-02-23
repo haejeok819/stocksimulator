@@ -17,6 +17,7 @@ class GameLedgerItem extends StatelessWidget {
     'RETRY': '재도전',
     'BONUS': '보너스',
     'BET': '베팅',
+    'GAME_RESULT': '게임 정산',
   };
 
   @override

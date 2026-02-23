@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
@@ -111,7 +112,9 @@ class _BetPointsInputScreenState extends ConsumerState<BetPointsInputScreen> {
     setState(() => _starting = true);
     try {
       ref.read(chartGameFlowControllerProvider.notifier).setBetPoints(_bet);
-      if (!widget.isWindowsGuest) {
+      final bool isMobile = !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+      if (isMobile && !widget.isWindowsGuest) {
         await ref.read(gamePointControllerProvider.notifier).spendForBet(_bet);
       }
       if (!mounted) return;

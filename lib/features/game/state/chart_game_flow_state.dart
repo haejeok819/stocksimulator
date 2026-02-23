@@ -7,69 +7,74 @@ import 'package:stocksimulator/data/repositories/stock_repository.dart';
 
 const int kOneYearTradingDays = 252;
 
-enum ChartGamePhase { canBuy, canSell, done }
-
-class ChartGameResult {
-  const ChartGameResult({
-    required this.returnPercent,
-    required this.buyDate,
-    required this.sellDate,
-    required this.buyIndex,
-    required this.sellIndex,
-  });
-
-  final double returnPercent;
-  final int buyDate;
-  final int sellDate;
-  final int buyIndex;
-  final int sellIndex;
-}
-
 class ChartGameFlowState {
   const ChartGameFlowState({
-    required this.betPoints,
+    required this.initialBetPoints,
+    required this.cashPoints,
+    required this.positionUnits,
+    required this.hasPosition,
+    required this.currentIndex,
+    required this.equityPoints,
+    required this.isFinished,
+    required this.finalValue,
+    required this.finalReturnPercent,
     required this.assetId,
     required this.assetName,
     required this.startIndex,
     required this.endIndex,
-    required this.phase,
-    required this.buyIndex,
-    required this.sellIndex,
-    required this.result,
     required this.segment,
     required this.isReady,
     required this.errorMessage,
   });
 
   const ChartGameFlowState.initial()
-      : betPoints = 0,
+      : initialBetPoints = 0,
+        cashPoints = 0,
+        positionUnits = 0,
+        hasPosition = false,
+        currentIndex = 0,
+        equityPoints = 0,
+        isFinished = false,
+        finalValue = null,
+        finalReturnPercent = null,
         assetId = null,
         assetName = null,
         startIndex = null,
         endIndex = null,
-        phase = ChartGamePhase.canBuy,
-        buyIndex = null,
-        sellIndex = null,
-        result = null,
         segment = const <PricePoint>[],
         isReady = false,
         errorMessage = null;
 
-  final int betPoints;
+  final int initialBetPoints;
+  final double cashPoints;
+  final double positionUnits;
+  final bool hasPosition;
+  final int currentIndex;
+  final double equityPoints;
+  final bool isFinished;
+  final double? finalValue;
+  final double? finalReturnPercent;
+
   final String? assetId;
   final String? assetName;
   final int? startIndex;
   final int? endIndex;
-  final ChartGamePhase phase;
-  final int? buyIndex;
-  final int? sellIndex;
-  final ChartGameResult? result;
   final List<PricePoint> segment;
   final bool isReady;
   final String? errorMessage;
 
   ChartGameFlowState copyWith({
-    int? betPoints,
+    int? initialBetPoints,
+    double? cashPoints,
+    double? positionUnits,
+    bool? hasPosition,
+    int? currentIndex,
+    double? equityPoints,
+    bool? isFinished,
+    double? finalValue,
+    bool clearFinalValue = false,
+    double? finalReturnPercent,
+    bool clearFinalReturnPercent = false,
     String? assetId,
     bool clearAssetId = false,
     String? assetName,
@@ -78,28 +83,26 @@ class ChartGameFlowState {
     bool clearStartIndex = false,
     int? endIndex,
     bool clearEndIndex = false,
-    ChartGamePhase? phase,
-    int? buyIndex,
-    bool clearBuyIndex = false,
-    int? sellIndex,
-    bool clearSellIndex = false,
-    ChartGameResult? result,
-    bool clearResult = false,
     List<PricePoint>? segment,
     bool? isReady,
     String? errorMessage,
     bool clearError = false,
   }) {
     return ChartGameFlowState(
-      betPoints: betPoints ?? this.betPoints,
+      initialBetPoints: initialBetPoints ?? this.initialBetPoints,
+      cashPoints: cashPoints ?? this.cashPoints,
+      positionUnits: positionUnits ?? this.positionUnits,
+      hasPosition: hasPosition ?? this.hasPosition,
+      currentIndex: currentIndex ?? this.currentIndex,
+      equityPoints: equityPoints ?? this.equityPoints,
+      isFinished: isFinished ?? this.isFinished,
+      finalValue: clearFinalValue ? null : (finalValue ?? this.finalValue),
+      finalReturnPercent:
+          clearFinalReturnPercent ? null : (finalReturnPercent ?? this.finalReturnPercent),
       assetId: clearAssetId ? null : (assetId ?? this.assetId),
       assetName: clearAssetName ? null : (assetName ?? this.assetName),
       startIndex: clearStartIndex ? null : (startIndex ?? this.startIndex),
       endIndex: clearEndIndex ? null : (endIndex ?? this.endIndex),
-      phase: phase ?? this.phase,
-      buyIndex: clearBuyIndex ? null : (buyIndex ?? this.buyIndex),
-      sellIndex: clearSellIndex ? null : (sellIndex ?? this.sellIndex),
-      result: clearResult ? null : (result ?? this.result),
       segment: segment ?? this.segment,
       isReady: isReady ?? this.isReady,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
@@ -107,8 +110,11 @@ class ChartGameFlowState {
   }
 }
 
-final NotifierProvider<ChartGameFlowController, ChartGameFlowState> chartGameFlowControllerProvider =
-    NotifierProvider<ChartGameFlowController, ChartGameFlowState>(ChartGameFlowController.new);
+final NotifierProvider<ChartGameFlowController, ChartGameFlowState>
+    chartGameFlowControllerProvider =
+    NotifierProvider<ChartGameFlowController, ChartGameFlowState>(
+  ChartGameFlowController.new,
+);
 
 class ChartGameFlowController extends Notifier<ChartGameFlowState> {
   final StockRepository _repository = StockRepository();
@@ -118,12 +124,17 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
   ChartGameFlowState build() => const ChartGameFlowState.initial();
 
   void setBetPoints(int n) {
+    final double bet = n.toDouble();
     state = state.copyWith(
-      betPoints: n,
-      phase: ChartGamePhase.canBuy,
-      clearBuyIndex: true,
-      clearSellIndex: true,
-      clearResult: true,
+      initialBetPoints: n,
+      cashPoints: bet,
+      positionUnits: 0,
+      hasPosition: false,
+      currentIndex: 0,
+      equityPoints: bet,
+      isFinished: false,
+      clearFinalValue: true,
+      clearFinalReturnPercent: true,
       clearAssetId: true,
       clearAssetName: true,
       clearStartIndex: true,
@@ -148,6 +159,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
 
       final int oneYearLength = min(kOneYearTradingDays, fullSeries.length);
       final int maxStart = fullSeries.length - oneYearLength;
+
       int chosenStart = 0;
       bool found = false;
       for (int i = 0; i < 10; i++) {
@@ -166,18 +178,23 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       final int chosenEnd = chosenStart + oneYearLength - 1;
       final List<PricePoint> segment = fullSeries.sublist(chosenStart, chosenEnd + 1);
 
+      final double bet = state.initialBetPoints.toDouble();
       state = state.copyWith(
         assetId: picked.assetKey,
         assetName: picked.displayName,
         startIndex: chosenStart,
         endIndex: chosenEnd,
         segment: segment,
-        phase: ChartGamePhase.canBuy,
-        clearBuyIndex: true,
-        clearSellIndex: true,
-        clearResult: true,
         isReady: true,
         clearError: true,
+        cashPoints: bet,
+        positionUnits: 0,
+        hasPosition: false,
+        currentIndex: 0,
+        equityPoints: bet,
+        isFinished: false,
+        clearFinalValue: true,
+        clearFinalReturnPercent: true,
       );
     } catch (_) {
       state = state.copyWith(errorMessage: '랜덤 선택에 실패했어요', isReady: false);
@@ -185,49 +202,102 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
     }
   }
 
+  void updateCurrentIndex(int index) {
+    if (state.segment.isEmpty || state.isFinished) return;
+    final int clamped = index.clamp(0, state.segment.length - 1);
+    final double currentPrice = state.segment[clamped].close;
+    final double equity = state.cashPoints + (state.positionUnits * currentPrice);
+    state = state.copyWith(currentIndex: clamped, equityPoints: equity);
+  }
+
   void onBuy(int currentIndex) {
-    if (state.phase != ChartGamePhase.canBuy) return;
-    state = state.copyWith(buyIndex: currentIndex, phase: ChartGamePhase.canSell);
+    if (state.isFinished || state.hasPosition || state.cashPoints <= 0 || state.segment.isEmpty) return;
+
+    final int clamped = currentIndex.clamp(0, state.segment.length - 1);
+    final double currentPrice = state.segment[clamped].close;
+    if (currentPrice <= 0) return;
+
+    final double units = state.cashPoints / currentPrice;
+    final double equity = units * currentPrice;
+    state = state.copyWith(
+      currentIndex: clamped,
+      positionUnits: units,
+      cashPoints: 0,
+      hasPosition: true,
+      equityPoints: equity,
+    );
   }
 
   void onSell(int currentIndex) {
-    if (state.phase != ChartGamePhase.canSell || state.buyIndex == null || state.segment.isEmpty) return;
+    if (state.isFinished || !state.hasPosition || state.segment.isEmpty) return;
 
-    final int sell = currentIndex.clamp(0, state.segment.length - 1);
-    final int buy = state.buyIndex!.clamp(0, state.segment.length - 1);
-    final PricePoint buyPoint = state.segment[buy];
-    final PricePoint sellPoint = state.segment[sell];
-    final double returnPercent = ((sellPoint.close / buyPoint.close) - 1) * 100;
+    final int clamped = currentIndex.clamp(0, state.segment.length - 1);
+    final double currentPrice = state.segment[clamped].close;
+    final double cash = state.positionUnits * currentPrice;
+    state = state.copyWith(
+      currentIndex: clamped,
+      cashPoints: cash,
+      positionUnits: 0,
+      hasPosition: false,
+      equityPoints: cash,
+    );
+  }
+
+  void finishGame() {
+    if (state.segment.isEmpty || state.isFinished) return;
+
+    final int lastIndex = state.segment.length - 1;
+    double cash = state.cashPoints;
+    double units = state.positionUnits;
+    final double lastPrice = state.segment[lastIndex].close;
+
+    if (state.hasPosition && units > 0) {
+      cash = units * lastPrice;
+      units = 0;
+    }
+
+    final double initial = state.initialBetPoints.toDouble();
+    final double finalValue = cash;
+    final double finalReturn = initial <= 0 ? 0 : ((finalValue / initial) - 1) * 100;
 
     state = state.copyWith(
-      sellIndex: sell,
-      phase: ChartGamePhase.done,
-      result: ChartGameResult(
-        returnPercent: returnPercent,
-        buyDate: buyPoint.ymd,
-        sellDate: sellPoint.ymd,
-        buyIndex: buy,
-        sellIndex: sell,
-      ),
+      currentIndex: lastIndex,
+      cashPoints: cash,
+      positionUnits: units,
+      hasPosition: false,
+      equityPoints: finalValue,
+      isFinished: true,
+      finalValue: finalValue,
+      finalReturnPercent: finalReturn,
     );
   }
 
   Future<StockModel> _pickRandomAsset() async {
     final List<StockModel> all = await _repository.getTopStocks(assetType: AssetType.stockKR);
     final List<StockModel> pool = all
-        .where((StockModel e) =>
-            e.assetType == AssetType.stockKR || e.assetType == AssetType.gold || e.assetType == AssetType.fx)
+        .where(
+          (StockModel e) =>
+              e.assetType == AssetType.stockKR ||
+              e.assetType == AssetType.gold ||
+              e.assetType == AssetType.fx,
+        )
         .toList(growable: false);
     if (pool.isEmpty) throw Exception('no asset');
     return pool[_random.nextInt(pool.length)];
   }
 
   Future<List<PricePoint>> _loadFullSeries(StockModel stock) async {
-    final List<int> days = await _repository.loadTradingDays(assetType: stock.assetType, assetKey: stock.assetKey);
+    final List<int> days =
+        await _repository.loadTradingDays(assetType: stock.assetType, assetKey: stock.assetKey);
     if (days.isEmpty) return <PricePoint>[];
     final DateTime start = _fromYmd(days.first);
     final DateTime end = _fromYmd(days.last);
-    return _repository.loadRangeByAsset(assetType: stock.assetType, assetKey: stock.assetKey, start: start, end: end);
+    return _repository.loadRangeByAsset(
+      assetType: stock.assetType,
+      assetKey: stock.assetKey,
+      start: start,
+      end: end,
+    );
   }
 
   DateTime _fromYmd(int ymd) {
