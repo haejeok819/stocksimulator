@@ -22,15 +22,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null && request.auth.uid == uid; // uid 필드를 문서 데이터에 별도 저장하지 않아도 동작
 
       match /records/{docId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, write: if request.auth != null && request.auth.uid == uid; // uid 필드를 문서 데이터에 별도 저장하지 않아도 동작
+      }
+
+      match /game_point_ledger/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid; // uid 필드를 문서 데이터에 별도 저장하지 않아도 동작
       }
     }
   }
 }
 ```
+
+추가 참고: 게임 포인트 지갑(`/users/{uid}`)과 `game_point_ledger`는 트랜잭션으로 갱신되므로, 규칙에서 `request.resource.data.uid == uid` 같은 필드 강제를 두면 쓰기가 거부될 수 있습니다.
 
 ## 4) 현재 앱 정책
 - Android/iOS: 구글 로그인 실제 연동
