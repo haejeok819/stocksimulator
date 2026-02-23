@@ -9,6 +9,15 @@ DateTime fromYmd(int ymd) {
   return DateTime(year, month, day);
 }
 
+int _weeklyAnchorKey(int ymd) {
+  final int year = ymd ~/ 10000;
+  final int month = (ymd % 10000) ~/ 100;
+  final int day = ymd % 100;
+  final DateTime date = DateTime(year, month, day);
+  final DateTime monday = date.subtract(Duration(days: date.weekday - 1));
+  return toYmd(monday);
+}
+
 List<int> buildDcaEventYmds({
   required List<int> tradingDaysSorted,
   required DateTime start,
@@ -19,26 +28,23 @@ List<int> buildDcaEventYmds({
 
   final int startYmd = toYmd(start);
   final int endYmd = toYmd(end);
-  final List<int> inRange = tradingDaysSorted.where((int ymd) => ymd >= startYmd && ymd <= endYmd).toList(growable: false);
+  final List<int> inRange = tradingDaysSorted
+      .where((int ymd) => ymd >= startYmd && ymd <= endYmd)
+      .toList(growable: false);
   if (inRange.isEmpty) return <int>[];
 
   if (interval == DcaInterval.tradingDaily) {
     return inRange;
   }
 
-  final Map<String, int> grouped = <String, int>{};
+  final Set<int> seenBuckets = <int>{};
+  final List<int> events = <int>[];
   for (final int ymd in inRange) {
-    final DateTime day = fromYmd(ymd);
-    final String key;
-    if (interval == DcaInterval.monthly) {
-      key = '${day.year}-${day.month.toString().padLeft(2, '0')}';
-    } else {
-      final DateTime weekAnchor = day.subtract(Duration(days: day.weekday - 1));
-      key = '${weekAnchor.year}-${weekAnchor.month.toString().padLeft(2, '0')}-${weekAnchor.day.toString().padLeft(2, '0')}';
+    final int bucketKey =
+        interval == DcaInterval.monthly ? (ymd ~/ 100) : _weeklyAnchorKey(ymd);
+    if (seenBuckets.add(bucketKey)) {
+      events.add(ymd);
     }
-    grouped.putIfAbsent(key, () => ymd);
   }
-
-  final List<int> events = grouped.values.toList()..sort();
   return events;
 }
