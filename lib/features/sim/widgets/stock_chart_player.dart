@@ -37,6 +37,8 @@ class StockChartPlayer extends StatefulWidget {
 
 class _StockChartPlayerState extends State<StockChartPlayer> {
   late List<double> _allPercents;
+  late List<String> _compactDateLabels;
+  late List<String> _focusDateLabels;
   late double _basePrice;
   double? _smoothedMinY;
   double? _smoothedMaxY;
@@ -76,6 +78,8 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
   void _recomputeDerivedData() {
     if (widget.points.isEmpty) {
       _allPercents = const <double>[];
+      _compactDateLabels = const <String>[];
+      _focusDateLabels = const <String>[];
       _basePrice = 1;
       return;
     }
@@ -84,6 +88,22 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
     _allPercents = widget.points
         .map((SimulationPoint point) => ((point.close / _basePrice) - 1) * 100)
         .toList(growable: false);
+    _compactDateLabels = widget.points
+        .map((SimulationPoint point) => _formatCompactYmd(point.ymd))
+        .toList(growable: false);
+    _focusDateLabels = widget.points
+        .map((SimulationPoint point) => _formatFocusYmd(point.ymd))
+        .toList(growable: false);
+  }
+
+  String _formatCompactYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
+  }
+
+  String _formatFocusYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
   @override
@@ -228,6 +248,8 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
           painter: _FullPeriodPercentChartPainter(
             points: widget.points,
             allPercents: _allPercents,
+            compactDateLabels: _compactDateLabels,
+            focusDateLabels: _focusDateLabels,
             visibleStartIndex: visibleStart,
             currentIndex: safeIndex,
             renderEndIndex: renderEndIndex,
@@ -250,6 +272,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   _FullPeriodPercentChartPainter({
     required this.points,
     required this.allPercents,
+    required this.compactDateLabels,
+    required this.focusDateLabels,
     required this.visibleStartIndex,
     required this.currentIndex,
     required this.renderEndIndex,
@@ -265,6 +289,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   final List<SimulationPoint> points;
   final List<double> allPercents;
+  final List<String> compactDateLabels;
+  final List<String> focusDateLabels;
   final int visibleStartIndex;
   final int currentIndex;
   final int renderEndIndex;
@@ -394,16 +420,12 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
 
   void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
     final int visibleCount = endIndex - startIndex + 1;
-    final List<int> indices = <int>[startIndex];
-    if (visibleCount >= 36) {
-      indices.add(startIndex + ((visibleCount - 1) * 0.55).round());
-    }
-    indices.add(endIndex);
+    final int midIndex = visibleCount >= 36 ? startIndex + ((visibleCount - 1) * 0.55).round() : -1;
 
     double lastRight = -1e9;
-    for (final int index in indices.toSet().toList()..sort()) {
+    for (final int index in <int>[startIndex, if (midIndex >= 0) midIndex, endIndex]) {
       final double x = chartRect.left + (index - startIndex) * stepX;
-      final String label = index == endIndex ? _formatFocusYmd(points[index].ymd) : _formatCompactYmd(points[index].ymd);
+      final String label = index == endIndex ? focusDateLabels[index] : compactDateLabels[index];
       final TextPainter tp = TextPainter(
         text: TextSpan(text: label, style: TextStyle(color: AppColors.helperText.withOpacity(0.68), fontSize: 10)),
         textDirection: TextDirection.ltr,
@@ -415,16 +437,6 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(drawX, chartRect.bottom + 6));
       lastRight = drawX + tp.width;
     }
-  }
-
-  String _formatCompactYmd(int ymd) {
-    final String raw = ymd.toString().padLeft(8, '0');
-    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}';
-  }
-
-  String _formatFocusYmd(int ymd) {
-    final String raw = ymd.toString().padLeft(8, '0');
-    return '${raw.substring(2, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
   }
 
   String _formatPriceLabel(double percent) {
