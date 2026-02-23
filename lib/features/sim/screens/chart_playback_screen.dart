@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:stocksimulator/app/theme/playback_design_tokens.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/features/records/models/attempt_record.dart';
@@ -53,17 +52,20 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
 
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
-  bool _isSpeedFlowInProgress = false;
   static const double _globalPlaybackSpeedMultiplier = 3.0;
+  late final String _adSessionId;
 
   @override
   void initState() {
     super.initState();
     _speed = 1;
     _frameTicker = createTicker(_onFrameTick);
+    _adSessionId = 'SIM:${DateTime.now().microsecondsSinceEpoch}';
+    AdService.instance.startSession(_adSessionId);
     AppSettings.speed8xUnlockedUntil.addListener(_on8xUnlockChanged);
     _schedule8xUnlockExpiryCheck();
     AdService.instance.preloadInterstitial();
+    AdService.instance.preloadRewarded();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       FocusScope.of(context).unfocus();
@@ -84,6 +86,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
     if (_frameTicker.isActive) {
       _frameTicker.stop();
     }
+    AdService.instance.endSession(_adSessionId);
     _frameTicker.dispose();
     super.dispose();
   }
@@ -151,33 +154,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
   }
 
   Future<bool> _showRewardedAdFor8xUnlock() async {
-    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
-    if (!mounted || ad == null) {
-      return false;
-    }
-
-    final Completer<bool> completer = Completer<bool>();
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (InterstitialAd ad) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(true);
-      },
-      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(false);
-      },
-    );
-
-    try {
-      ad.show();
-    } catch (_) {
-      ad.dispose();
-      if (!completer.isCompleted) completer.complete(false);
-    }
-
-    final bool watched = await completer.future;
-    AdService.instance.preloadInterstitial();
-    return watched;
+    return AdService.instance.showRewardedFor8xUnlock();
   }
 
   Future<void> _onSpeedSelected(double selectedSpeed) async {
@@ -316,28 +293,18 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
       _frameTicker.stop();
     }
 
-    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
-    if (ad == null) {
-      _showResult();
+    final int denominator = widget.points.length > 1 ? widget.points.length - 1 : 1;
+    final double progress = _index / denominator;
+    if (progress >= 0.8) {
+      await _showResult();
       return;
     }
 
-    final Completer<void> completer = Completer<void>();
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (InterstitialAd ad) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete();
-      },
-      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete();
-      },
+    await AdService.instance.tryShowInterstitialGate(
+      reason: 'sim_skip',
+      onProceed: _showResult,
+      onSkip: _showResult,
     );
-
-    ad.show();
-    await completer.future;
-
-    _showResult();
   }
 
   Future<void> _showResult() async {
@@ -400,11 +367,7 @@ class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTi
           finalAmount: finalAmount,
           profit: profit,
           profitRate: profitRate,
-          onRetry: () {
-            AdService.instance.showOnClose(
-              onDone: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
-            );
-          },
+          onRetry: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
           chartValues: widget.points.map((SimulationPoint point) => point.value).toList(),
         );
       },
