@@ -49,6 +49,8 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     final GameWallet? wallet = ref.watch(gameWalletProvider).valueOrNull;
     final AsyncValue<List<GamePointLedgerEntry>> ledgerAsync = ref.watch(gameLedgerProvider);
     final bool isCheckingInToday = wallet?.lastCheckInDate == DateKey.kstYmd();
+    final bool hasPermissionIssue = actionState.hasError &&
+        actionState.error.toString().contains('permission-denied');
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -73,6 +75,20 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
               ),
               onAdTap: () => _onAdRewardTap(isLoggedIn: isLoggedIn, isWindows: isWindows),
             ),
+            if (hasPermissionIssue)
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.upSegment.withOpacity(0.45)),
+                ),
+                child: const Text(
+                  '권한 오류가 감지됐어요. docs/firebase_google_login_setup.md 의 Firestore Rules 3) 항목을 적용해주세요.',
+                  style: TextStyle(color: AppColors.helperText, fontSize: 12, height: 1.35),
+                ),
+              ),
             const SizedBox(height: 18),
             _ChartGameCtaCard(
               isWindowsGuest: isWindowsGuest,
@@ -171,10 +187,16 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
   String _resolveActionErrorMessage(Object error) {
     if (error is AlreadyCheckedInException) return '오늘은 이미 출석체크 했어요';
     if (error is FirebaseException) {
-      if (error.code == 'permission-denied') return '권한 설정을 확인해주세요';
+      if (error.code == 'permission-denied') {
+        return '권한 오류: Firestore Rules에서 users/{uid} 및 game_point_ledger 쓰기 권한을 허용해주세요';
+      }
+      if (error.code == 'unauthenticated') return '로그인이 만료됐어요. 다시 로그인해주세요';
       if (error.code == 'unavailable') return '네트워크 상태를 확인해주세요';
     }
     final String text = error.toString();
+    if (text.contains('permission-denied')) {
+      return '권한 오류: Firestore Rules에서 users/{uid} 및 game_point_ledger 쓰기 권한을 허용해주세요';
+    }
     if (text.contains('로그인 후 이용할 수 있어요')) return '로그인 후 이용할 수 있어요';
     return '네트워크 오류가 발생했어요';
   }
