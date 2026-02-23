@@ -24,12 +24,16 @@ class StockChartPlayer extends StatefulWidget {
     required this.currentIndex,
     required this.playbackPosition,
     required this.pulse,
+    this.buyIndex,
+    this.sellIndex,
   });
 
   final List<SimulationPoint> points;
   final int currentIndex;
   final double playbackPosition;
   final double pulse;
+  final int? buyIndex;
+  final int? sellIndex;
 
   @override
   State<StockChartPlayer> createState() => _StockChartPlayerState();
@@ -261,6 +265,8 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             lineStrokeWidth: _kLineStroke,
             pointRadius: _kPointRadius,
             pointGlowRadius: _kPointGlow,
+            buyIndex: widget.buyIndex,
+            sellIndex: widget.sellIndex,
           ),
         );
       },
@@ -285,6 +291,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.lineStrokeWidth,
     required this.pointRadius,
     required this.pointGlowRadius,
+    required this.buyIndex,
+    required this.sellIndex,
   });
 
   final List<SimulationPoint> points;
@@ -298,6 +306,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final double minY;
   final double maxY;
   final double pulse;
+  final int? buyIndex;
+  final int? sellIndex;
   final double basePrice;
   final double lineStrokeWidth;
   final double pointRadius;
@@ -413,6 +423,15 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
     canvas.drawCircle(currentPoint, pointRadius + 2.4 * pulse, Paint()..color = Colors.white);
 
+    if (buyIndex != null && buyIndex! >= visibleStartIndex && buyIndex! <= renderEndIndex) {
+      final Offset buyPoint = pointAt(buyIndex!);
+      canvas.drawCircle(buyPoint, pointRadius + 1.8, Paint()..color = AppColors.action);
+    }
+    if (sellIndex != null && sellIndex! >= visibleStartIndex && sellIndex! <= renderEndIndex) {
+      final Offset sellPoint = pointAt(sellIndex!);
+      canvas.drawCircle(sellPoint, pointRadius + 1.8, Paint()..color = AppColors.upSegment);
+    }
+
     canvas.restore();
 
     _drawXLabels(canvas, chartRect, stepX, visibleStartIndex, currentIndex);
@@ -457,6 +476,8 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
         oldDelegate.basePrice != basePrice ||
         oldDelegate.lineStrokeWidth != lineStrokeWidth ||
         oldDelegate.pointRadius != pointRadius ||
-        oldDelegate.pointGlowRadius != pointGlowRadius;
+        oldDelegate.pointGlowRadius != pointGlowRadius ||
+        oldDelegate.buyIndex != buyIndex ||
+        oldDelegate.sellIndex != sellIndex;
   }
 }

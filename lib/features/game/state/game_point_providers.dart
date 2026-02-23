@@ -100,4 +100,19 @@ class GamePointController extends AsyncNotifier<void> {
       rethrow;
     }
   }
+
+  Future<void> spendForBet(int betPoints) async {
+    final String? uid = _uid;
+    if (uid == null || uid.isEmpty) {
+      throw Exception('로그인 후 이용할 수 있어요');
+    }
+    state = const AsyncLoading<void>();
+    try {
+      await _service.applyDelta(uid, delta: -betPoints, reason: GamePointReason.bet, meta: <String, dynamic>{'betPoints': betPoints});
+      state = const AsyncData<void>(null);
+    } catch (error, stackTrace) {
+      state = AsyncError<void>(error, stackTrace);
+      rethrow;
+    }
+  }
 }

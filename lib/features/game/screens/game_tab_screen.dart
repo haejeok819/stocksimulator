@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
+import 'package:stocksimulator/features/game/screens/bet_points_input_screen.dart';
 import 'package:stocksimulator/features/game/state/game_point_providers.dart';
 import 'package:stocksimulator/features/game/widgets/game_ledger_item.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
@@ -181,24 +182,21 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
   }
 
   Future<void> _onGameEntryTap({required bool isLoggedIn, required bool isWindowsGuest}) async {
-    if (isWindowsGuest) {
-      _showMessage('게스트 모드로 차트 게임을 시작해요');
-      return;
-    }
-
-    if (!isLoggedIn) {
+    if (!isLoggedIn && !isWindowsGuest) {
       _showMessage('로그인 후 이용할 수 있어요');
       return;
     }
 
-    try {
-      await ref.read(gamePointControllerProvider.notifier).spendForGameEntry();
-      _showMessage('차트 게임 준비중입니다');
-    } on InsufficientGamePointsException {
-      _showMessage('게임 포인트가 부족해요');
-    } catch (_) {
-      _showMessage('네트워크 오류가 발생했어요');
-    }
+    final int currentBalance = ref.read(gameWalletProvider).valueOrNull?.gamePoints ?? 0;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: const RouteSettings(name: 'game_bet'),
+        builder: (_) => BetPointsInputScreen(
+          isWindowsGuest: isWindowsGuest,
+          currentBalance: currentBalance,
+        ),
+      ),
+    );
   }
 
   void _showMessage(String text) {
@@ -394,7 +392,7 @@ class _GameEntryCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    isWindowsGuest ? '게스트 플레이는 결과가 저장되지 않아요' : '포인트를 사용해 게임에 입장해보세요',
+                    isWindowsGuest ? '게스트 플레이는 결과가 저장되지 않아요' : '베팅 게임 포인트를 입력하고 시작해요',
                     style: const TextStyle(color: AppColors.helperText, fontSize: 12),
                   ),
                 ],
