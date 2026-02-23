@@ -27,7 +27,7 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     final String? uid = ref.watch(authControllerProvider).user?.uid;
     final bool isLoggedIn = uid != null && uid.isNotEmpty;
     final bool isWindows = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
-    final bool canGuestPlay = isWindows && !isLoggedIn;
+    final bool isWindowsGuest = isWindows && !isLoggedIn;
 
     if (isLoggedIn && !_initTriggered) {
       _initTriggered = true;
@@ -36,116 +36,84 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
           await ref.read(gamePointControllerProvider.notifier).initIfNeeded();
         } catch (_) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('네트워크 오류가 발생했어요')),
-          );
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('네트워크 오류가 발생했어요')));
         }
       });
     }
-
-    if (!isLoggedIn) {
-      _initTriggered = false;
-    }
+    if (!isLoggedIn) _initTriggered = false;
 
     final AsyncValue<void> actionState = ref.watch(gamePointControllerProvider);
     final bool isActionLoading = actionState.isLoading;
-    final AsyncValue<GameWallet?> walletAsync = ref.watch(gameWalletProvider);
+    final GameWallet? wallet = ref.watch(gameWalletProvider).valueOrNull;
     final AsyncValue<List<GamePointLedgerEntry>> ledgerAsync = ref.watch(gameLedgerProvider);
-
-    final GameWallet? wallet = walletAsync.valueOrNull;
     final bool isCheckingInToday = wallet?.lastCheckInDate == DateKey.kstYmd();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('게임')),
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          _WalletCard(isLoggedIn: isLoggedIn, isWindowsGuest: canGuestPlay, wallet: wallet),
-          if (canGuestPlay) ...<Widget>[
-            const SizedBox(height: 8),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+          children: <Widget>[
+            _HeaderRow(
+              pointsText: isLoggedIn ? '${AppNumberFormat.formatInt(wallet?.gamePoints ?? 0)}P' : '—',
+              isWindowsGuest: isWindowsGuest,
+            ),
+            const SizedBox(height: 20),
+            _PointSummaryCard(
+              pointsText: isLoggedIn ? '${AppNumberFormat.formatInt(wallet?.gamePoints ?? 0)}P' : '—',
+              isLoggedIn: isLoggedIn,
+              isWindowsGuest: isWindowsGuest,
+              isActionLoading: isActionLoading,
+              isCheckingInToday: isCheckingInToday,
+              onCheckInTap: () => _onCheckInTap(
+                isLoggedIn: isLoggedIn,
+                isCheckingInToday: isCheckingInToday,
+              ),
+              onAdTap: () => _onAdRewardTap(isLoggedIn: isLoggedIn, isWindows: isWindows),
+            ),
+            const SizedBox(height: 18),
+            _ChartGameCtaCard(
+              isWindowsGuest: isWindowsGuest,
+              isLoggedIn: isLoggedIn,
+              onTap: () => _onGameEntryTap(isLoggedIn: isLoggedIn, isWindowsGuest: isWindowsGuest),
+            ),
+            const SizedBox(height: 18),
             const Text(
-              'Windows 게스트 모드에서는 포인트/내역 기능 없이 차트 게임만 이용할 수 있어요.',
-              style: TextStyle(color: AppColors.helperText, fontSize: 12),
+              '최근 내역',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
             ),
+            const SizedBox(height: 10),
+            if (!isLoggedIn)
+              _LedgerPlaceholder(
+                text: isWindowsGuest
+                    ? '게스트 플레이는 저장되지 않습니다.'
+                    : '로그인 후 플레이 기록을 확인할 수 있어요.',
+              )
+            else
+              ledgerAsync.when(
+                data: (List<GamePointLedgerEntry> entries) {
+                  if (entries.isEmpty) return const _LedgerPlaceholder(text: '아직 내역이 없어요.');
+                  return Column(
+                    children: entries
+                        .map((GamePointLedgerEntry e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: GameLedgerItem(entry: e),
+                            ))
+                        .toList(growable: false),
+                  );
+                },
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (_, __) => const _LedgerPlaceholder(text: '네트워크 오류가 발생했어요.'),
+              ),
           ],
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _ActionButton(
-                  isPrimary: true,
-                  title: isCheckingInToday ? '오늘 출석 완료' : '출석체크',
-                  subtitle: '+${GamePointService.checkInReward}P',
-                  icon: Icons.check_rounded,
-                  enabledVisual: isLoggedIn,
-                  disabledKeepPrimaryTone: isCheckingInToday,
-                  showLock: !isLoggedIn,
-                  isLoading: isActionLoading,
-                  onTap: () => _onCheckInTap(isLoggedIn: isLoggedIn, isCheckingInToday: isCheckingInToday),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ActionButton(
-                  isPrimary: false,
-                  title: '포인트 받기',
-                  subtitle: isWindows && !isLoggedIn ? '모바일 로그인 후 이용' : '광고 시청 +${GamePointService.adRewardPoints}P',
-                  icon: Icons.play_circle_outline_rounded,
-                  enabledVisual: isLoggedIn,
-                  showLock: !isLoggedIn,
-                  isLoading: isActionLoading,
-                  onTap: () => _onAdRewardTap(isLoggedIn: isLoggedIn, isWindows: isWindows),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _GameEntryCard(
-            canUsePoints: isLoggedIn,
-            isWindowsGuest: canGuestPlay,
-            isLoading: isActionLoading,
-            onTap: () => _onGameEntryTap(isLoggedIn: isLoggedIn, isWindowsGuest: canGuestPlay),
-          ),
-          const SizedBox(height: 20),
-          const Text('최근 내역', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)),
-          const SizedBox(height: 10),
-          if (!isLoggedIn)
-            _buildCompactPlaceholder(
-              isWindows ? '모바일 로그인 후 내역을 볼 수 있어요\n게스트 모드에서는 내역이 저장되지 않아요' : '로그인 후 내역을 볼 수 있어요',
-            )
-          else
-            ledgerAsync.when(
-              data: (List<GamePointLedgerEntry> entries) {
-                if (entries.isEmpty) {
-                  return _buildCompactPlaceholder('아직 내역이 없어요');
-                }
-                return Column(
-                  children: entries
-                      .map((GamePointLedgerEntry e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: GameLedgerItem(entry: e),
-                          ))
-                      .toList(growable: false),
-                );
-              },
-              loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
-              error: (_, __) => _buildCompactPlaceholder('네트워크 오류가 발생했어요'),
-            ),
-        ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildCompactPlaceholder(String text) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(text, style: const TextStyle(color: AppColors.helperText)),
     );
   }
 
@@ -205,42 +173,122 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
   }
 }
 
-class _WalletCard extends StatelessWidget {
-  const _WalletCard({required this.isLoggedIn, required this.isWindowsGuest, required this.wallet});
+class _HeaderRow extends StatelessWidget {
+  const _HeaderRow({required this.pointsText, required this.isWindowsGuest});
 
-  final bool isLoggedIn;
+  final String pointsText;
   final bool isWindowsGuest;
-  final GameWallet? wallet;
 
   @override
   Widget build(BuildContext context) {
-    final String balanceText = isLoggedIn ? '${AppNumberFormat.formatInt(wallet?.gamePoints ?? 0)}P' : '—';
+    return Row(
+      children: <Widget>[
+        const Expanded(
+          child: Text(
+            '게임',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 30),
+          ),
+        ),
+        if (isWindowsGuest)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppColors.helperText.withOpacity(0.35)),
+            ),
+            child: const Text('게스트 모드', style: TextStyle(color: AppColors.helperText, fontSize: 11)),
+          ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: AppColors.helperText.withOpacity(0.22)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.monetization_on_rounded, color: AppColors.action.withOpacity(0.95), size: 16),
+              const SizedBox(width: 4),
+              Text(pointsText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PointSummaryCard extends StatelessWidget {
+  const _PointSummaryCard({
+    required this.pointsText,
+    required this.isLoggedIn,
+    required this.isWindowsGuest,
+    required this.isActionLoading,
+    required this.isCheckingInToday,
+    required this.onCheckInTap,
+    required this.onAdTap,
+  });
+
+  final String pointsText;
+  final bool isLoggedIn;
+  final bool isWindowsGuest;
+  final bool isActionLoading;
+  final bool isCheckingInToday;
+  final VoidCallback onCheckInTap;
+  final VoidCallback onAdTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final String helper = isWindowsGuest
+        ? '게스트 모드는 포인트 적립/저장이 되지 않습니다.'
+        : '차트 게임에서 사용되는 포인트입니다.';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(19),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: <BoxShadow>[
+          BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 14, offset: const Offset(0, 6)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              const Text('게임 포인트', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 18)),
-              Text(balanceText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 28)),
+              const Text('게임 포인트', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              Text(pointsText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 27)),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            isWindowsGuest
-                ? '게스트 모드에서는 포인트 적립/소모 없이 무료로 차트 게임을 시작할 수 있어요.'
-                : isLoggedIn
-                    ? '출석체크/광고 보상으로 포인트를 모아 게임에 입장해보세요.'
-                    : '로그인 후 포인트 기능을 이용할 수 있어요.',
-            style: const TextStyle(color: AppColors.helperText),
+          Text(helper, style: const TextStyle(color: AppColors.helperText, fontSize: 12)),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _MiniOutlineButton(
+                  icon: Icons.check_rounded,
+                  label: isCheckingInToday ? '오늘 출석 완료' : '출석체크',
+                  enabled: isLoggedIn && !isCheckingInToday,
+                  loading: isActionLoading,
+                  onTap: onCheckInTap,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MiniOutlineButton(
+                  icon: Icons.play_circle_outline_rounded,
+                  label: '포인트 받기',
+                  enabled: isLoggedIn,
+                  loading: isActionLoading,
+                  onTap: onAdTap,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -248,167 +296,121 @@ class _WalletCard extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.isPrimary,
-    required this.title,
-    required this.subtitle,
+class _MiniOutlineButton extends StatelessWidget {
+  const _MiniOutlineButton({
     required this.icon,
-    required this.enabledVisual,
+    required this.label,
+    required this.enabled,
+    required this.loading,
     required this.onTap,
-    this.showLock = false,
-    this.isLoading = false,
-    this.disabledKeepPrimaryTone = false,
   });
 
-  final bool isPrimary;
-  final String title;
-  final String subtitle;
   final IconData icon;
-  final bool enabledVisual;
-  final bool showLock;
-  final bool isLoading;
-  final bool disabledKeepPrimaryTone;
+  final String label;
+  final bool enabled;
+  final bool loading;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final bool visuallyEnabled = enabledVisual && !isLoading;
-    final Color background = isPrimary
-        ? (visuallyEnabled
-            ? AppColors.action
-            : (disabledKeepPrimaryTone ? AppColors.action.withOpacity(0.65) : AppColors.surface))
-        : AppColors.surface;
-
-    final BorderSide borderSide = isPrimary
-        ? BorderSide.none
-        : BorderSide(color: AppColors.helperText.withOpacity(visuallyEnabled ? 0.35 : 0.22));
-
     return SizedBox(
-      height: 54,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(15),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.fromBorderSide(borderSide),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: <Widget>[
-                if (isLoading)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
-                  )
-                else
-                  Icon(showLock ? Icons.lock_outline_rounded : icon, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: AppColors.helperText.withOpacity(0.92), fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+      height: 42,
+      child: OutlinedButton.icon(
+        onPressed: loading ? null : onTap,
+        icon: loading
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(enabled ? icon : Icons.lock_outline_rounded, size: 16),
+        label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          side: BorderSide(color: AppColors.helperText.withOpacity(enabled ? 0.35 : 0.2)),
+          backgroundColor: enabled ? AppColors.background.withOpacity(0.35) : AppColors.background.withOpacity(0.2),
         ),
       ),
     );
   }
 }
 
-class _GameEntryCard extends StatelessWidget {
-  const _GameEntryCard({
-    required this.canUsePoints,
+class _ChartGameCtaCard extends StatelessWidget {
+  const _ChartGameCtaCard({
     required this.isWindowsGuest,
+    required this.isLoggedIn,
     required this.onTap,
-    required this.isLoading,
   });
 
-  final bool canUsePoints;
   final bool isWindowsGuest;
-  final bool isLoading;
+  final bool isLoggedIn;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final String chipText = isWindowsGuest ? '게스트 모드 무료' : '입장료 ${GamePointService.gameEntryCost}P';
-
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       child: Ink(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.helperText.withOpacity(0.18)),
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            colors: <Color>[AppColors.action.withOpacity(0.35), AppColors.surface],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(color: AppColors.action.withOpacity(0.2), blurRadius: 16, offset: const Offset(0, 8)),
+          ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      const Text('차트 게임 시작', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                      if (!canUsePoints && !isWindowsGuest) ...<Widget>[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.helperText),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AppColors.helperText.withOpacity(0.25)),
-                    ),
-                    child: Text(chipText, style: const TextStyle(color: AppColors.helperText, fontSize: 12)),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    isWindowsGuest ? '게스트 플레이는 결과가 저장되지 않아요' : '베팅 게임 포인트를 입력하고 시작해요',
-                    style: const TextStyle(color: AppColors.helperText, fontSize: 12),
-                  ),
-                ],
-              ),
+            const Row(
+              children: <Widget>[
+                Text('차트 게임', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                Spacer(),
+                Icon(Icons.chevron_right_rounded, color: Colors.white),
+              ],
             ),
-            if (isLoading)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2.2),
+            const SizedBox(height: 10),
+            const Text('차트 게임 시작', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 19)),
+            const SizedBox(height: 12),
+            if (isWindowsGuest)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.background.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: AppColors.helperText.withOpacity(0.28)),
+                ),
+                child: const Text('게스트 무료', style: TextStyle(color: AppColors.helperText, fontSize: 12)),
               )
             else
-              const Icon(Icons.chevron_right_rounded, color: AppColors.helperText),
+              Text(
+                isLoggedIn ? '베팅 후 시작' : '로그인 후 이용 가능',
+                style: const TextStyle(color: AppColors.helperText, fontSize: 12),
+              ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LedgerPlaceholder extends StatelessWidget {
+  const _LedgerPlaceholder({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.background.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.helperText.withOpacity(0.18)),
+      ),
+      child: Text(text, style: const TextStyle(color: AppColors.helperText, fontSize: 12)),
     );
   }
 }
