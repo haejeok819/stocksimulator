@@ -27,6 +27,10 @@ service cloud.firestore {
       match /records/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
+
+      match /game_point_ledger/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
   }
 }
