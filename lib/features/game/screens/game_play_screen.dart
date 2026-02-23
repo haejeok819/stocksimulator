@@ -32,6 +32,9 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   bool _resultShown = false;
   bool _settlementDone = false;
   int _sellRemainingSec = 0;
+  double _entryPulse = 0;
+  String? _executionLabel;
+  bool _showExecutionOverlay = false;
 
   @override
   void initState() {
@@ -66,6 +69,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     _playbackPosition = (_playbackPosition + (2.2 * dt)).clamp(0, maxIndex.toDouble());
     _index = _playbackPosition.floor();
     _pulse += dt * 4.4;
+    _entryPulse = min(1, _entryPulse + (dt * 1.8));
 
     ref.read(chartGameFlowControllerProvider.notifier).updateCurrentIndex(_index);
     if (mounted) {
@@ -90,16 +94,43 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   }
 
   void _buy() {
-    ref.read(chartGameFlowControllerProvider.notifier).onBuy(_index);
-    final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-    setState(() => _sellRemainingSec = next);
+    if (_showExecutionOverlay) return;
+    _showTradeExecution('매수 체결', () {
+      ref.read(chartGameFlowControllerProvider.notifier).onBuy(_index);
+      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
+      setState(() => _sellRemainingSec = next);
+    });
   }
 
   void _sell() {
     final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
-    if (!_canSell(flow)) return;
-    ref.read(chartGameFlowControllerProvider.notifier).onSell(_index);
-    setState(() => _sellRemainingSec = 0);
+    if (!_canSell(flow) || _showExecutionOverlay) return;
+    _showTradeExecution('매도 체결', () {
+      ref.read(chartGameFlowControllerProvider.notifier).onSell(_index);
+      setState(() => _sellRemainingSec = 0);
+    });
+  }
+
+  Future<void> _showTradeExecution(String label, VoidCallback action) async {
+    setState(() {
+      _executionLabel = label;
+      _showExecutionOverlay = true;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    action();
+    setState(() => _showExecutionOverlay = false);
+  }
+
+  Color _pnlColor(double pnl) {
+    if (pnl > 0) return AppColors.upSegment;
+    if (pnl < 0) return AppColors.downSegment;
+    return AppColors.helperText;
+  }
+
+  double? _buyReferencePrice(ChartGameFlowState flow) {
+    if (!flow.hasPosition || flow.positionUnits <= 0 || flow.initialBetPoints <= 0) return null;
+    return flow.initialBetPoints / flow.positionUnits;
   }
 
   Future<void> _finishAndShowResult() async {
@@ -166,129 +197,260 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     final double returnPercent =
         flow.initialBetPoints <= 0 ? 0 : ((flow.equityPoints / flow.initialBetPoints) - 1) * 100;
     final double progress = points.isEmpty ? 0 : (_index / max(1, points.length - 1));
-
+    final bool buyEnabled = !flow.isFinished && !flow.hasPosition && flow.cashPoints > 0;
+    final bool sellEnabled = _canSell(flow);
+    final Color pnlColor = _pnlColor(pnl);
+    final double entryPulseWeight = Curves.easeOut.transform((_entryPulse / 0.55).clamp(0, 1));
     final String status = flow.isFinished
         ? '게임 종료'
-        : (flow.hasPosition ? '이쯤에서 털까?' : '지금 들어갈까?');
+        : (flow.hasPosition ? '이 타이밍에 간다?' : '지금 판을 건다?');
 
     return Scaffold(
       appBar: AppBar(title: Text(flow.assetName ?? '차트 게임')),
       backgroundColor: AppColors.background,
       body: points.isEmpty
           ? const Center(child: CircularProgressIndicator())
-          : Column(
+          : Stack(
               children: <Widget>[
-                SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
+                Column(
+                  children: <Widget>[
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  flow.assetName ?? '-',
-                                  style: const TextStyle(
-                                      color: Colors.white, fontWeight: FontWeight.w600),
-                                ),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Text(
+                                      flow.assetName ?? '-',
+                                      style: const TextStyle(
+                                          color: Colors.white, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                  const Text(
+                                    '현재 평가금액',
+                                    style: TextStyle(
+                                      color: AppColors.helperText,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 4),
                               Text(
                                 '${AppNumberFormat.formatInt(flow.equityPoints)}P',
                                 style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w800,
-                                    fontSize: 22),
+                                    fontSize: 29,
+                                    height: 1.0),
+                              ),
+                              const SizedBox(height: 6),
+                              TweenAnimationBuilder<double>(
+                                key: ValueKey<String>(
+                                  '${pnl.toStringAsFixed(0)}_${returnPercent.toStringAsFixed(2)}',
+                                ),
+                                tween: Tween<double>(begin: 1, end: 1.05),
+                                duration: const Duration(milliseconds: 120),
+                                curve: Curves.easeOut,
+                                builder: (BuildContext context, double value, Widget? child) {
+                                  final double downScale = value > 1 ? 2 - value : 1;
+                                  return Transform.scale(
+                                    scale: downScale,
+                                    alignment: Alignment.centerLeft,
+                                    child: child,
+                                  );
+                                },
+                                child: Text(
+                                  '손익 ${pnl >= 0 ? '+' : ''}${AppNumberFormat.formatInt(pnl)}P (${returnPercent >= 0 ? '+' : ''}${returnPercent.toStringAsFixed(2)}%)',
+                                  style: TextStyle(
+                                    color: pnlColor,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: <Widget>[
+                                  const Text('게임 진행률',
+                                      style: TextStyle(
+                                          color: AppColors.helperText,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                  const Spacer(),
+                                  Text('${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
+                                      style: const TextStyle(
+                                          color: AppColors.helperText,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700)),
+                                ],
+                              ),
+                              const SizedBox(height: 7),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: SizedBox(
+                                  height: 8,
+                                  child: LayoutBuilder(
+                                    builder: (BuildContext context, BoxConstraints constraints) {
+                                      final double ratio = progress.clamp(0, 1);
+                                      return Stack(
+                                        children: <Widget>[
+                                          Container(color: AppColors.helperText.withOpacity(0.14)),
+                                          AnimatedContainer(
+                                            duration: const Duration(milliseconds: 200),
+                                            curve: Curves.easeOut,
+                                            width: constraints.maxWidth * ratio,
+                                            decoration: BoxDecoration(
+                                              color: ratio >= 0.5
+                                                  ? AppColors.action.withOpacity(0.96)
+                                                  : AppColors.action.withOpacity(0.84),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '손익 ${pnl >= 0 ? '+' : ''}${AppNumberFormat.formatInt(pnl)}P  ·  수익률 ${returnPercent >= 0 ? '+' : ''}${returnPercent.toStringAsFixed(2)}%',
-                            style: const TextStyle(
-                                color: AppColors.helperText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: StockChartPlayer(
+                          points: points,
+                          currentIndex: _index,
+                          playbackPosition: _playbackPosition,
+                          pulse: (0.5 + sin(_pulse) * 0.5) * (0.55 + entryPulseWeight * 0.45),
+                          referencePrice: _buyReferencePrice(flow),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        status,
+                        style: const TextStyle(
+                          color: AppColors.helperText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: ActionDecisionButton(
+                              text: '매수',
+                              enabled: buyEnabled,
+                              onPressed: _buy,
+                              backgroundColor: buyEnabled ? AppColors.upSegment : AppColors.surface,
+                            ),
                           ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: <Widget>[
-                              const Text('게임 진행률',
-                                  style: TextStyle(
-                                      color: AppColors.helperText,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600)),
-                              const Spacer(),
-                              Text('${(progress * 100).clamp(0, 100).toStringAsFixed(0)}%',
-                                  style: const TextStyle(
-                                      color: AppColors.helperText,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              minHeight: 7,
-                              value: progress.clamp(0, 1),
-                              backgroundColor: AppColors.helperText.withOpacity(0.16),
-                              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.action),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ActionDecisionButton(
+                              text: _sellRemainingSec > 0 ? '매도 (${_sellRemainingSec})' : '매도',
+                              enabled: sellEnabled,
+                              onPressed: _sell,
+                              backgroundColor:
+                                  sellEnabled ? AppColors.downSegment : AppColors.surface,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+                  ],
                 ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: StockChartPlayer(
-                      points: points,
-                      currentIndex: _index,
-                      playbackPosition: _playbackPosition,
-                      pulse: 0.5 + sin(_pulse) * 0.5,
+                IgnorePointer(
+                  ignoring: !_showExecutionOverlay,
+                  child: AnimatedOpacity(
+                    opacity: _showExecutionOverlay ? 0.8 : 0,
+                    duration: const Duration(milliseconds: 100),
+                    child: Container(
+                      color: Colors.black,
+                      alignment: Alignment.center,
+                      child: Text(
+                        _executionLabel ?? '',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 26,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(status, style: const TextStyle(color: AppColors.helperText)),
-                ),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: (!flow.isFinished && !flow.hasPosition && flow.cashPoints > 0)
-                              ? _buy
-                              : null,
-                          child: const Text('매수'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _canSell(flow) ? _sell : null,
-                          child: Text(_sellRemainingSec > 0 ? '매도 (${_sellRemainingSec})' : '매도'),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
             ),
+    );
+  }
+}
+
+class ActionDecisionButton extends StatefulWidget {
+  const ActionDecisionButton({
+    super.key,
+    required this.text,
+    required this.enabled,
+    required this.onPressed,
+    required this.backgroundColor,
+  });
+
+  final String text;
+  final bool enabled;
+  final VoidCallback onPressed;
+  final Color backgroundColor;
+
+  @override
+  State<ActionDecisionButton> createState() => _ActionDecisionButtonState();
+}
+
+class _ActionDecisionButtonState extends State<ActionDecisionButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTapUp: (_) => setState(() => _pressed = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 100),
+        scale: _pressed && widget.enabled ? 0.97 : 1,
+        child: SizedBox(
+          height: 54,
+          child: ElevatedButton(
+            onPressed: widget.enabled ? widget.onPressed : null,
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: widget.backgroundColor,
+              disabledBackgroundColor: AppColors.surface,
+              disabledForegroundColor: AppColors.helperText.withOpacity(0.42),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child:
+                Text(widget.text, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          ),
+        ),
+      ),
     );
   }
 }

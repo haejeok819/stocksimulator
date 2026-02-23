@@ -26,6 +26,7 @@ class StockChartPlayer extends StatefulWidget {
     required this.pulse,
     this.buyIndex,
     this.sellIndex,
+    this.referencePrice,
   });
 
   final List<SimulationPoint> points;
@@ -34,6 +35,7 @@ class StockChartPlayer extends StatefulWidget {
   final double pulse;
   final int? buyIndex;
   final int? sellIndex;
+  final double? referencePrice;
 
   @override
   State<StockChartPlayer> createState() => _StockChartPlayerState();
@@ -267,6 +269,7 @@ class _StockChartPlayerState extends State<StockChartPlayer> {
             pointGlowRadius: _kPointGlow,
             buyIndex: widget.buyIndex,
             sellIndex: widget.sellIndex,
+            referencePrice: widget.referencePrice,
           ),
         );
       },
@@ -293,6 +296,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     required this.pointGlowRadius,
     required this.buyIndex,
     required this.sellIndex,
+    required this.referencePrice,
   });
 
   final List<SimulationPoint> points;
@@ -308,6 +312,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
   final double pulse;
   final int? buyIndex;
   final int? sellIndex;
+  final double? referencePrice;
   final double basePrice;
   final double lineStrokeWidth;
   final double pointRadius;
@@ -331,7 +336,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
       chartRect.bottom - verticalSafety,
     );
 
-    final Paint axisPaint = Paint()..color = AppColors.helperText.withOpacity(0.18);
+    final Paint axisPaint = Paint()..color = AppColors.helperText.withOpacity(0.12);
     const int yTickCount = 4;
     final double currentPercent = allPercents[currentIndex];
     double nearestTickDist = double.infinity;
@@ -395,6 +400,29 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     canvas.save();
     canvas.clipRRect(RRect.fromRectAndRadius(chartRect, const Radius.circular(10)));
 
+    final double currentPrice = points[currentIndex].close;
+    if (referencePrice != null && referencePrice! > 0) {
+      final double refPercent = ((referencePrice! / basePrice) - 1) * 100;
+      final double refY = safeRect.bottom - ((refPercent - minY) / range) * safeRect.height;
+      if (refY >= safeRect.top && refY <= safeRect.bottom) {
+        final Paint refPaint = Paint()
+          ..color = AppColors.helperText.withOpacity(0.28)
+          ..strokeWidth = 1.2;
+        const double dash = 6;
+        const double gap = 4;
+        double x = chartRect.left;
+        while (x < chartRect.right) {
+          canvas.drawLine(Offset(x, refY), Offset(min(x + dash, chartRect.right), refY), refPaint);
+          x += dash + gap;
+        }
+      }
+
+      final Color tintColor = currentPrice >= referencePrice!
+          ? AppColors.upSegment.withOpacity(0.035)
+          : AppColors.downSegment.withOpacity(0.035);
+      canvas.drawRect(chartRect, Paint()..color = tintColor);
+    }
+
     for (int i = visibleStartIndex; i < currentIndex; i++) {
       final Offset p1 = pointAt(i);
       final Offset p2 = pointAt(i + 1);
@@ -420,8 +448,39 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
     }
 
     final double glowRadius = pointGlowRadius * (0.72 + 0.28 * pulse);
-    canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.26));
+    canvas.drawCircle(currentPoint, glowRadius, Paint()..color = AppColors.action.withOpacity(0.20));
     canvas.drawCircle(currentPoint, pointRadius + 2.4 * pulse, Paint()..color = Colors.white);
+
+    final String currentPriceLabel = '${AppNumberFormat.formatInt(currentPrice)}원';
+    final TextPainter labelPainter = TextPainter(
+      text: TextSpan(
+        text: currentPriceLabel,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final double labelPadX = 8;
+    final double labelWidth = labelPainter.width + labelPadX * 2;
+    final double labelHeight = labelPainter.height + 6;
+    final double desiredLeft = currentPoint.dx + 8;
+    final double labelLeft = desiredLeft + labelWidth > chartRect.right
+        ? currentPoint.dx - labelWidth - 8
+        : desiredLeft;
+    final double labelTop = (currentPoint.dy - labelHeight - 6)
+        .clamp(safeRect.top + 2, safeRect.bottom - labelHeight - 2);
+    final RRect bubbleRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(labelLeft, labelTop, labelWidth, labelHeight),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(
+      bubbleRect,
+      Paint()..color = AppColors.surface.withOpacity(0.92),
+    );
+    labelPainter.paint(canvas, Offset(labelLeft + labelPadX, labelTop + 3));
 
     if (buyIndex != null && buyIndex! >= visibleStartIndex && buyIndex! <= renderEndIndex) {
       final Offset buyPoint = pointAt(buyIndex!);
@@ -478,6 +537,7 @@ class _FullPeriodPercentChartPainter extends CustomPainter {
         oldDelegate.pointRadius != pointRadius ||
         oldDelegate.pointGlowRadius != pointGlowRadius ||
         oldDelegate.buyIndex != buyIndex ||
-        oldDelegate.sellIndex != sellIndex;
+        oldDelegate.sellIndex != sellIndex ||
+        oldDelegate.referencePrice != referencePrice;
   }
 }
