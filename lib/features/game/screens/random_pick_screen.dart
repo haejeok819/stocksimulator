@@ -14,26 +14,86 @@ class RandomPickScreen extends ConsumerStatefulWidget {
   ConsumerState<RandomPickScreen> createState() => _RandomPickScreenState();
 }
 
-class _RandomPickScreenState extends ConsumerState<RandomPickScreen> {
+class _RandomPickScreenState extends ConsumerState<RandomPickScreen>
+    with SingleTickerProviderStateMixin {
   final Random _random = Random();
+  static const List<String> _rollingCandidates = <String>[
+    '삼성전자',
+    'SK하이닉스',
+    '금(KRX)',
+    'USD/KRW',
+    'NAVER',
+    '현대차',
+  ];
+
+  late final AnimationController _slotController;
   String _rollingText = '선택 중...';
   int _countdown = 0;
   bool _loading = true;
+  bool _confirmed = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _slotController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..addListener(_onSlotFrame);
     _runFlow();
+  }
+
+  @override
+  void dispose() {
+    _slotController
+      ..removeListener(_onSlotFrame)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSlotFrame() {
+    if (!mounted || _confirmed) return;
+    final double t = _slotController.value;
+    final double eased = Curves.easeOutCubic.transform(t);
+
+    if (t >= 0.9) {
+      final String finalText =
+          ref.read(chartGameFlowControllerProvider).assetName ?? '선택됨';
+      setState(() {
+        _rollingText = finalText;
+        _confirmed = true;
+      });
+      return;
+    }
+
+    final int changeGate = (eased * 1000).floor();
+    if (changeGate % 17 == 0) {
+      setState(() {
+        _rollingText =
+            _rollingCandidates[_random.nextInt(_rollingCandidates.length)];
+      });
+    }
   }
 
   Future<void> _runFlow() async {
     try {
       await ref.read(chartGameFlowControllerProvider.notifier).startGame();
-      final String finalText = ref.read(chartGameFlowControllerProvider).assetName ?? '선택됨';
-      await _rollingAnimation(finalText);
+      if (!mounted) return;
+
+      _rollingText = _rollingCandidates[_random.nextInt(_rollingCandidates.length)];
+      await _slotController.forward();
 
       if (!mounted) return;
+      final String finalText =
+          ref.read(chartGameFlowControllerProvider).assetName ?? '선택됨';
+      setState(() {
+        _rollingText = finalText;
+        _confirmed = true;
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+
       setState(() {
         _loading = false;
         _countdown = 3;
@@ -61,19 +121,6 @@ class _RandomPickScreenState extends ConsumerState<RandomPickScreen> {
     }
   }
 
-  Future<void> _rollingAnimation(String finalText) async {
-    final List<String> candidates = <String>['삼성전자', 'SK하이닉스', '금(KRX)', 'USD/KRW', 'NAVER', '현대차'];
-    const int frameCount = 16;
-    for (int i = 0; i < frameCount; i++) {
-      await Future<void>.delayed(Duration(milliseconds: 45 + i * 12));
-      if (!mounted) return;
-      setState(() => _rollingText = candidates[_random.nextInt(candidates.length)]);
-    }
-    if (!mounted) return;
-    setState(() => _rollingText = finalText);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-  }
-
   @override
   Widget build(BuildContext context) {
     final ChartGameFlowState flow = ref.watch(chartGameFlowControllerProvider);
@@ -88,30 +135,61 @@ class _RandomPickScreenState extends ConsumerState<RandomPickScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    const Text('랜덤 선택 중…', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+                    const Text(
+                      '랜덤 선택 중…',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
-                      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 28,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Text(
                         _rollingText,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
-                    Text(
-                      flow.assetName == null ? '종목을 고르고 있어요' : '오늘의 종목: ${flow.assetName}',
-                      style: const TextStyle(color: AppColors.helperText),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text('기간: 1년', style: TextStyle(color: AppColors.helperText)),
+                    if (_confirmed) ...<Widget>[
+                      Text(
+                        flow.assetName == null
+                            ? '종목을 고르고 있어요'
+                            : '오늘의 종목: ${flow.assetName}',
+                        style: const TextStyle(color: AppColors.helperText),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        '기간: 1년',
+                        style: TextStyle(color: AppColors.helperText),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     if (_loading)
                       const CircularProgressIndicator()
                     else if (_countdown > 0)
-                      Text('$_countdown', style: const TextStyle(color: Colors.white, fontSize: 64, fontWeight: FontWeight.w800)),
+                      Text(
+                        '$_countdown',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 64,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                   ],
                 ),
               ),

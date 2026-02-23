@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/data/models/simulation_point.dart';
 import 'package:stocksimulator/features/game/state/chart_game_flow_state.dart';
+import 'package:stocksimulator/features/game/widgets/chart_game_result_dialog.dart';
 import 'package:stocksimulator/features/game/state/game_point_providers.dart';
 import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
@@ -96,11 +97,11 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     _resultShown = true;
 
     if (!mounted) return;
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      backgroundColor: AppColors.surface,
+      barrierDismissible: false,
       builder: (BuildContext context) {
-        return _ResultSheet(
+        return ChartGameResultDialog(
           flow: flow,
           isWindowsGuest: _isWindowsGuest(),
           onRetry: () {
@@ -143,30 +144,41 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text('평가금액: ${AppNumberFormat.formatInt(flow.equityPoints)}P',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text(
-                          '손익: ${pnl >= 0 ? '+' : ''}${AppNumberFormat.formatInt(pnl)}P  /  '
-                          '수익률: ${returnPercent >= 0 ? '+' : ''}${returnPercent.toStringAsFixed(2)}%',
-                          style: const TextStyle(color: AppColors.helperText, fontSize: 12),
-                        ),
-                      ],
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  flow.assetName ?? '-',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              Text(
+                                '${AppNumberFormat.formatInt(flow.equityPoints)}P',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '손익 ${pnl >= 0 ? '+' : ''}${AppNumberFormat.formatInt(pnl)}P  ·  수익률 ${returnPercent >= 0 ? '+' : ''}${returnPercent.toStringAsFixed(2)}%',
+                            style: const TextStyle(color: AppColors.helperText, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -226,75 +238,6 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
                 ),
               ],
             ),
-    );
-  }
-}
-
-class _ResultSheet extends StatelessWidget {
-  const _ResultSheet({
-    required this.flow,
-    required this.isWindowsGuest,
-    required this.onRetry,
-    required this.onClose,
-  });
-
-  final ChartGameFlowState flow;
-  final bool isWindowsGuest;
-  final VoidCallback onRetry;
-  final VoidCallback onClose;
-
-  String _formatYmd(int ymd) {
-    final String raw = ymd.toString().padLeft(8, '0');
-    return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final double finalValue = flow.finalValue ?? flow.equityPoints;
-    final double finalReturn = flow.finalReturnPercent ?? 0;
-    final int startYmd = flow.segment.isNotEmpty ? flow.segment.first.ymd : 0;
-    final int endYmd = flow.segment.isNotEmpty ? flow.segment.last.ymd : 0;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Text(flow.assetName ?? '-',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
-          const SizedBox(height: 6),
-          const Text('기간: 1년', style: TextStyle(color: AppColors.helperText)),
-          if (startYmd > 0 && endYmd > 0)
-            Text('구간: ${_formatYmd(startYmd)} ~ ${_formatYmd(endYmd)}',
-                style: const TextStyle(color: AppColors.helperText, fontSize: 12)),
-          const SizedBox(height: 6),
-          Text('베팅 포인트: ${AppNumberFormat.formatInt(flow.initialBetPoints)}P',
-              style: const TextStyle(color: AppColors.helperText)),
-          Text('최종 평가금액: ${AppNumberFormat.formatInt(finalValue)}P',
-              style: const TextStyle(color: Colors.white)),
-          Text('최종 수익률: ${finalReturn >= 0 ? '+' : ''}${finalReturn.toStringAsFixed(2)}%',
-              style: const TextStyle(color: Colors.white)),
-          if (isWindowsGuest)
-            const Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text('게스트 모드는 보상/기록 저장이 없어요',
-                  style: TextStyle(color: AppColors.helperText, fontSize: 12)),
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: OutlinedButton(onPressed: onRetry, child: const Text('한판 더')),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton(onPressed: onClose, child: const Text('닫기')),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
