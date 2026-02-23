@@ -3,7 +3,6 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/features/battle/state/battle_playback_controller.dart';
 import 'package:stocksimulator/features/battle/state/battle_providers.dart';
@@ -30,15 +29,19 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   bool _flash = false;
   bool _isProcessingResultAd = false;
   bool _isSpeedFlowInProgress = false;
+  late final String _adSessionId;
 
   Timer? _speedUnlockTimer;
   static const Duration _unlockDuration = Duration(minutes: 5);
   @override
   void initState() {
     super.initState();
+    _adSessionId = 'BATTLE:${DateTime.now().microsecondsSinceEpoch}';
+    AdService.instance.startSession(_adSessionId);
     AppSettings.speed8xUnlockedUntil.addListener(_on8xUnlockChanged);
     _schedule8xUnlockExpiryCheck();
     AdService.instance.preloadInterstitial();
+    AdService.instance.preloadRewarded();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       FocusScope.of(context).unfocus();
@@ -51,6 +54,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
   void dispose() {
     _speedUnlockTimer?.cancel();
     AppSettings.speed8xUnlockedUntil.removeListener(_on8xUnlockChanged);
+    AdService.instance.endSession(_adSessionId);
     super.dispose();
   }
 
@@ -88,63 +92,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     });
   }
 
-  Future<bool> _showInterstitialAdGate() async {
-    if (AdService.instance.adsRemoved) {
-      return true;
-    }
-
-    final InterstitialAd? ad = await AdService.instance.takeOrLoadInterstitial();
-    if (!mounted || ad == null) {
-      return false;
-    }
-
-    final Completer<bool> completer = Completer<bool>();
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (InterstitialAd ad) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(true);
-      },
-      onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
-        ad.dispose();
-        if (!completer.isCompleted) completer.complete(false);
-      },
-    );
-
-    try {
-      ad.show();
-    } catch (_) {
-      ad.dispose();
-      if (!completer.isCompleted) completer.complete(false);
-    }
-
-    final bool watched = await completer.future;
-    AdService.instance.preloadInterstitial();
-    return watched;
-  }
-
-  Future<void> _onResultViewPressed(BattleSeriesData data, BattleSetupState setup) async {
-    if (_isProcessingResultAd || !mounted) return;
-
-    setState(() {
-      _isProcessingResultAd = true;
-    });
-
-    final BattlePlaybackStatus previousStatus = _pauseBattlePlaybackForInteraction();
-    final bool watched = await _showInterstitialAdGate();
-
-    if (!mounted) return;
-
-    if (!watched) {
-      setState(() {
-        _isProcessingResultAd = false;
-      });
-      _resumeBattlePlaybackIfNeeded(previousStatus);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('광고 시청이 완료되지 않아 결과를 볼 수 없어요.')),
-      );
-      return;
-    }
-
+  Future<void> _openResultDialogFromEnd(BattleSeriesData data, BattleSetupState setup) async {
     ref.read(battlePlaybackControllerProvider.notifier).skipToEnd();
     final BattleTick tick = data.tickAt(data.length - 1);
     ref.read(battleResultProvider.notifier).state = BattleResultState(
@@ -155,10 +103,29 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
       winner: tick.returnA >= tick.returnB ? 'A' : 'B',
     );
 
+    await _showResultDialog(tick: tick, setup: setup, data: data);
+  }
+
+  Future<void> _onResultViewPressed(BattleSeriesData data, BattleSetupState setup) async {
+    if (_isProcessingResultAd || !mounted) return;
+
+    setState(() {
+      _isProcessingResultAd = true;
+    });
+
+    final BattlePlaybackStatus previousStatus = _pauseBattlePlaybackForInteraction();
+
+    await AdService.instance.tryShowInterstitialGate(
+      reason: 'battle_result',
+      onProceed: () => _openResultDialogFromEnd(data, setup),
+      onSkip: () => _openResultDialogFromEnd(data, setup),
+    );
+
+    if (!mounted) return;
     setState(() {
       _isProcessingResultAd = false;
     });
-    await _showResultDialog(tick: tick, setup: setup, data: data);
+    _resumeBattlePlaybackIfNeeded(previousStatus);
   }
 
 
@@ -209,7 +176,7 @@ class _BattlePlaybackScreenState extends ConsumerState<BattlePlaybackScreen> {
     );
 
     if (shouldWatchAd == true && mounted) {
-      final bool unlocked = await _showInterstitialAdGate();
+      final bool unlocked = await AdService.instance.showRewardedFor8xUnlock();
       if (mounted && unlocked) {
         AppSettings.unlock8xSpeedFor(_unlockDuration);
         ref.read(battlePlaybackControllerProvider.notifier).setSpeed(8);
