@@ -2,30 +2,22 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
-import 'package:stocksimulator/data/models/price_year_data.dart';
-import 'package:stocksimulator/data/models/stock_model.dart';
-import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/game/screens/game_play_screen.dart';
+import 'package:stocksimulator/features/game/state/chart_game_flow_state.dart';
 
-class RandomPickScreen extends StatefulWidget {
-  const RandomPickScreen({super.key, required this.betPoints, required this.isWindowsGuest});
-
-  final int betPoints;
-  final bool isWindowsGuest;
+class RandomPickScreen extends ConsumerStatefulWidget {
+  const RandomPickScreen({super.key});
 
   @override
-  State<RandomPickScreen> createState() => _RandomPickScreenState();
+  ConsumerState<RandomPickScreen> createState() => _RandomPickScreenState();
 }
 
-class _RandomPickScreenState extends State<RandomPickScreen> {
-  final StockRepository _repository = StockRepository();
+class _RandomPickScreenState extends ConsumerState<RandomPickScreen> {
   final Random _random = Random();
-
   String _rollingText = '선택 중...';
   int _countdown = 0;
-  StockModel? _pickedStock;
-  List<PricePoint>? _pickedSeries;
   bool _loading = true;
   String? _error;
 
@@ -37,15 +29,10 @@ class _RandomPickScreenState extends State<RandomPickScreen> {
 
   Future<void> _runFlow() async {
     try {
-      final StockModel stock = await _pickRandomStock();
-      final List<PricePoint> series = await _pickOneYearSeries(stock);
-      if (!mounted) return;
-      setState(() {
-        _pickedStock = stock;
-        _pickedSeries = series;
-      });
+      await ref.read(chartGameFlowControllerProvider.notifier).startGame();
+      final String finalText = ref.read(chartGameFlowControllerProvider).assetName ?? '선택됨';
+      await _rollingAnimation(finalText);
 
-      await _rollingAnimation(stock.displayName);
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -58,19 +45,14 @@ class _RandomPickScreenState extends State<RandomPickScreen> {
         setState(() => _countdown -= 1);
       }
 
-      if (!mounted || _pickedSeries == null || _pickedStock == null) return;
+      if (!mounted) return;
       await Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           settings: const RouteSettings(name: 'game_play'),
-          builder: (_) => GamePlayScreen(
-            betPoints: widget.betPoints,
-            isWindowsGuest: widget.isWindowsGuest,
-            stockName: _pickedStock!.displayName,
-            points: _pickedSeries!,
-          ),
+          builder: (_) => const GamePlayScreen(),
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _error = '랜덤 선택에 실패했어요';
@@ -92,47 +74,10 @@ class _RandomPickScreenState extends State<RandomPickScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }
 
-  Future<StockModel> _pickRandomStock() async {
-    final List<StockModel> all = await _repository.getTopStocks(assetType: AssetType.stockKR);
-    final List<StockModel> available = all.where((StockModel e) => e.assetType == AssetType.stockKR || e.assetType == AssetType.gold || e.assetType == AssetType.fx).toList();
-    if (available.isEmpty) {
-      throw Exception('no stocks');
-    }
-    return available[_random.nextInt(available.length)];
-  }
-
-  Future<List<PricePoint>> _pickOneYearSeries(StockModel stock) async {
-    final List<int> days = await _repository.loadTradingDays(assetType: stock.assetType, assetKey: stock.assetKey);
-    if (days.length < 220) {
-      throw Exception('not enough days');
-    }
-
-    for (int attempt = 0; attempt < 20; attempt++) {
-      final int startIdx = _random.nextInt(max(1, days.length - 210));
-      final DateTime startDate = _fromYmd(days[startIdx]);
-      final DateTime endDate = startDate.add(const Duration(days: 365));
-      final List<PricePoint> series = await _repository.loadRangeByAsset(
-        assetType: stock.assetType,
-        assetKey: stock.assetKey,
-        start: startDate,
-        end: endDate,
-      );
-      if (series.length >= 200) {
-        return series;
-      }
-    }
-    throw Exception('cannot pick range');
-  }
-
-  DateTime _fromYmd(int ymd) {
-    final int y = ymd ~/ 10000;
-    final int m = (ymd % 10000) ~/ 100;
-    final int d = ymd % 100;
-    return DateTime(y, m, d);
-  }
-
   @override
   Widget build(BuildContext context) {
+    final ChartGameFlowState flow = ref.watch(chartGameFlowControllerProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
@@ -149,11 +94,15 @@ class _RandomPickScreenState extends State<RandomPickScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
                       decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16)),
-                      child: Text(_rollingText, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800)),
+                      child: Text(
+                        _rollingText,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800),
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      _pickedStock == null ? '종목을 고르고 있어요' : '오늘의 종목: ${_pickedStock!.displayName}',
+                      flow.assetName == null ? '종목을 고르고 있어요' : '오늘의 종목: ${flow.assetName}',
                       style: const TextStyle(color: AppColors.helperText),
                     ),
                     const SizedBox(height: 4),

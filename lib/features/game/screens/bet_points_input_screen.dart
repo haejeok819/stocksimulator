@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/features/game/screens/random_pick_screen.dart';
+import 'package:stocksimulator/features/game/state/chart_game_flow_state.dart';
 import 'package:stocksimulator/features/game/state/game_point_providers.dart';
 import 'package:stocksimulator/shared/services/game_point_service.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
@@ -85,7 +86,9 @@ class _BetPointsInputScreenState extends ConsumerState<BetPointsInputScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              _insufficient ? '게임 포인트가 부족해요' : (widget.isWindowsGuest ? '게스트 모드는 기록/보상 저장이 없어요' : '베팅한 게임 포인트로 결과 보상을 계산해요'),
+              _insufficient
+                  ? '게임 포인트가 부족해요'
+                  : (widget.isWindowsGuest ? '게스트 모드는 기록/보상 저장이 없어요' : '베팅한 게임 포인트로 결과 보상을 계산해요'),
               style: TextStyle(color: _insufficient ? AppColors.upSegment : AppColors.helperText),
             ),
             const Spacer(),
@@ -107,6 +110,7 @@ class _BetPointsInputScreenState extends ConsumerState<BetPointsInputScreen> {
   Future<void> _start() async {
     setState(() => _starting = true);
     try {
+      ref.read(chartGameFlowControllerProvider.notifier).setBetPoints(_bet);
       if (!widget.isWindowsGuest) {
         await ref.read(gamePointControllerProvider.notifier).spendForBet(_bet);
       }
@@ -114,7 +118,7 @@ class _BetPointsInputScreenState extends ConsumerState<BetPointsInputScreen> {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           settings: const RouteSettings(name: 'game_random_pick'),
-          builder: (_) => RandomPickScreen(betPoints: _bet, isWindowsGuest: widget.isWindowsGuest),
+          builder: (_) => const RandomPickScreen(),
         ),
       );
     } on InsufficientGamePointsException {
