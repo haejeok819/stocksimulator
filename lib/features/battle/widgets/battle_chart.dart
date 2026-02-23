@@ -391,14 +391,18 @@ class _BattleChartPainter extends CustomPainter {
 
   void _drawXLabels(Canvas canvas, Rect chartRect, double stepX, int startIndex, int endIndex) {
     final int visibleCount = endIndex - startIndex + 1;
+    final int? middleIndex =
+        visibleCount >= 36 ? startIndex + ((visibleCount - 1) * 0.55).round() : null;
     final List<int> indices = <int>[startIndex];
-    if (visibleCount >= 36) {
-      indices.add(startIndex + ((visibleCount - 1) * 0.55).round());
+    if (middleIndex != null && middleIndex != startIndex && middleIndex != endIndex) {
+      indices.add(middleIndex);
     }
-    indices.add(endIndex);
+    if (endIndex != startIndex) {
+      indices.add(endIndex);
+    }
 
     double lastRight = -1e9;
-    for (final int index in indices.toSet().toList()..sort()) {
+    for (final int index in indices) {
       final double x = chartRect.left + (index - startIndex) * stepX;
       final String label = index == endIndex ? _formatYmd(dates[index]) : _formatYmdShort(dates[index]);
       final TextPainter tp = TextPainter(
