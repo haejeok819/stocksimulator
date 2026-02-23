@@ -531,34 +531,19 @@ class BattleAmountInput extends ConsumerWidget {
             const SizedBox(height: 12),
             Row(
               children: <Widget>[
-                Expanded(
-                  child: _AmountButton(
-                    icon: Icons.remove,
-                    onTap: () => ref.read(battleSetupProvider.notifier).setInvestAmount((setup.investAmount - 10000).clamp(100, 100000000)),
+                for (int i = 0; i < presets.length; i++) ...<Widget>[
+                  Expanded(
+                    child: ChoiceChip(
+                      label: Center(child: Text(_presetLabel(presets[i]), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      selected: setup.investAmount == presets[i],
+                      onSelected: (_) => ref.read(battleSetupProvider.notifier).setInvestAmount(presets[i]),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _AmountButton(
-                    icon: Icons.add,
-                    onTap: () => ref.read(battleSetupProvider.notifier).setInvestAmount((setup.investAmount + 10000).clamp(100, 100000000)),
-                  ),
-                ),
+                  if (i != presets.length - 1) const SizedBox(width: 8),
+                ],
               ],
             ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: presets
-                  .map(
-                    (int amount) => ChoiceChip(
-                      label: Text(_presetLabel(amount)),
-                      selected: setup.investAmount == amount,
-                      onSelected: (_) => ref.read(battleSetupProvider.notifier).setInvestAmount(amount),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
           ],
         ),
       ),

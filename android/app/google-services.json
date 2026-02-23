@@ -12,7 +12,36 @@
           "package_name": "com.motorstock.stocksimulator"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "242887280631-7ugo01lgb36adpjm8le2bphetg9kkeip.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.motorstock.stocksimulator",
+            "certificate_hash": "4102b3a46abde3e31ba00ab5fcf940d2f30b6b78"
+          }
+        },
+        {
+          "client_id": "242887280631-hd5gft380uqehnok8qtlq0n53pehfqsl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.motorstock.stocksimulator",
+            "certificate_hash": "50ddcbcbf15a9c34d45137e84bc9f71bc0672ec8"
+          }
+        },
+        {
+          "client_id": "242887280631-r256v1tfu30h0lueurunvmpkrrdrbfso.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.motorstock.stocksimulator",
+            "certificate_hash": "7ed8cf61acd501391f0070af1468665d40874ea4"
+          }
+        },
+        {
+          "client_id": "242887280631-qu22q0k6nr21gsratg3jsao03hsmk3tr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCXN-HhZy7JLjjLdKtd2E39EYLkkyD5SN0"
@@ -20,7 +49,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "242887280631-qu22q0k6nr21gsratg3jsao03hsmk3tr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "242887280631-71jbh5b7s483h6j9g44n1auson3coe8m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.motorstock.stocksimulator"
+              }
+            }
+          ]
         }
       }
     }

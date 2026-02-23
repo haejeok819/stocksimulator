@@ -274,6 +274,12 @@ class _PresetChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    final double fontSize = (screenWidth * 0.045).clamp(15.0, 22.0);
+    final double vPad = (fontSize * 0.45).clamp(8.0, 12.0);
+    final double hPad = (fontSize * 0.55).clamp(8.0, 14.0);
+
     return Material(
       color: selected ? const Color(0xFF5677E7) : const Color(0xFF2A2A32),
       borderRadius: BorderRadius.circular(19),
@@ -286,27 +292,17 @@ class _PresetChip extends StatelessWidget {
             border: Border.all(color: const Color(0xFF3A3A42), width: 1),
           ),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final double adaptiveFontSize = (constraints.maxWidth * 0.16).clamp(10.5, 14.0);
-              return SizedBox(
-                height: 18,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: adaptiveFontSize,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            },
+          padding: EdgeInsets.symmetric(vertical: vPad, horizontal: hPad),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: fontSize,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              height: 0.6,
+            ),
           ),
         ),
       ),
