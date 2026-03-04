@@ -101,13 +101,17 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   void _buy() {
     if (_showExecutionOverlay) return;
     _showTradeExecution('매수 체결', () {
-      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
+      if (flow.segment.isEmpty) {
+        return;
+      }
+      final int liveIndex = flow.currentIndex.clamp(0, flow.segment.length - 1);
+      final double executedBuyPrice = flow.segment[liveIndex].close;
       ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
-      final ChartGameFlowState updatedFlow = ref.read(chartGameFlowControllerProvider);
-      final int next = _computeSellRemaining(updatedFlow);
+      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
       setState(() {
         _sellRemainingSec = next;
-        _latestBuyReferencePrice = updatedFlow.entryPrice;
+        _latestBuyReferencePrice = executedBuyPrice;
       });
     });
   }
