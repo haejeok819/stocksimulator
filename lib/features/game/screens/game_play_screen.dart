@@ -101,12 +101,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   void _buy() {
     if (_showExecutionOverlay) return;
     _showTradeExecution('매수 체결', () {
-      final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
-      if (flow.segment.isEmpty) {
-        return;
-      }
-      final int liveIndex = flow.currentIndex.clamp(0, flow.segment.length - 1);
-      final double executedBuyPrice = flow.segment[liveIndex].close;
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
       ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
       setState(() {
@@ -122,10 +117,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     _showTradeExecution('매도 체결', () {
       final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
       ref.read(chartGameFlowControllerProvider.notifier).onSell(liveIndex);
-      setState(() {
-        _sellRemainingSec = 0;
-        _latestBuyReferencePrice = null;
-      });
+      setState(() => _sellRemainingSec = 0);
     });
   }
 
@@ -144,11 +136,6 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     if (pnl > 0) return AppColors.upSegment;
     if (pnl < 0) return AppColors.downSegment;
     return AppColors.helperText;
-  }
-
-  double? _buyReferencePrice(ChartGameFlowState flow) {
-    if (!flow.hasPosition || flow.positionUnits <= 0) return null;
-    return _latestBuyReferencePrice ?? flow.entryPrice;
   }
 
   Future<void> _finishAndShowResult() async {
@@ -358,7 +345,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
                           currentIndex: _index,
                           playbackPosition: _playbackPosition,
                           pulse: (0.5 + sin(_pulse) * 0.5) * (0.55 + entryPulseWeight * 0.45),
-                          referencePrice: _buyReferencePrice(flow),
+                          referencePrice: flow.entryPrice,
                         ),
                       ),
                     ),
