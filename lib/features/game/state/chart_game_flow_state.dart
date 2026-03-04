@@ -22,6 +22,7 @@ class ChartGameFlowState {
     required this.relativeReturnPercent,
     required this.settlementDeltaPoints,
     required this.sellUnlockAt,
+    required this.entryPrice,
     required this.assetId,
     required this.assetName,
     required this.startIndex,
@@ -45,6 +46,7 @@ class ChartGameFlowState {
         relativeReturnPercent = null,
         settlementDeltaPoints = null,
         sellUnlockAt = null,
+        entryPrice = null,
         assetId = null,
         assetName = null,
         startIndex = null,
@@ -66,6 +68,7 @@ class ChartGameFlowState {
   final double? relativeReturnPercent;
   final int? settlementDeltaPoints;
   final DateTime? sellUnlockAt;
+  final double? entryPrice;
 
   final String? assetId;
   final String? assetName;
@@ -95,6 +98,8 @@ class ChartGameFlowState {
     bool clearSettlementDeltaPoints = false,
     DateTime? sellUnlockAt,
     bool clearSellUnlockAt = false,
+    double? entryPrice,
+    bool clearEntryPrice = false,
     String? assetId,
     bool clearAssetId = false,
     String? assetName,
@@ -128,6 +133,7 @@ class ChartGameFlowState {
           ? null
           : (settlementDeltaPoints ?? this.settlementDeltaPoints),
       sellUnlockAt: clearSellUnlockAt ? null : (sellUnlockAt ?? this.sellUnlockAt),
+      entryPrice: clearEntryPrice ? null : (entryPrice ?? this.entryPrice),
       assetId: clearAssetId ? null : (assetId ?? this.assetId),
       assetName: clearAssetName ? null : (assetName ?? this.assetName),
       startIndex: clearStartIndex ? null : (startIndex ?? this.startIndex),
@@ -168,6 +174,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       clearRelativeReturnPercent: true,
       clearSettlementDeltaPoints: true,
       clearSellUnlockAt: true,
+      clearEntryPrice: true,
       clearAssetId: true,
       clearAssetName: true,
       clearStartIndex: true,
@@ -232,6 +239,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
         clearRelativeReturnPercent: true,
         clearSettlementDeltaPoints: true,
         clearSellUnlockAt: true,
+        clearEntryPrice: true,
       );
     } catch (_) {
       state = state.copyWith(errorMessage: '랜덤 선택에 실패했어요', isReady: false);
@@ -263,6 +271,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       hasPosition: true,
       equityPoints: equity,
       sellUnlockAt: DateTime.now().add(const Duration(seconds: 5)),
+      entryPrice: currentPrice,
     );
   }
 
@@ -279,6 +288,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       hasPosition: false,
       equityPoints: cash,
       clearSellUnlockAt: true,
+      clearEntryPrice: true,
     );
   }
 
@@ -318,6 +328,7 @@ class ChartGameFlowController extends Notifier<ChartGameFlowState> {
       relativeReturnPercent: relativeReturn * 100,
       settlementDeltaPoints: settlementDelta,
       clearSellUnlockAt: true,
+      clearEntryPrice: true,
     );
   }
 
