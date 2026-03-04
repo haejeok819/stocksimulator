@@ -96,7 +96,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   void _buy() {
     if (_showExecutionOverlay) return;
     _showTradeExecution('매수 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onBuy(_index);
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
       setState(() => _sellRemainingSec = next);
     });
@@ -106,7 +107,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
     if (!_canSell(flow) || _showExecutionOverlay) return;
     _showTradeExecution('매도 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onSell(_index);
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      ref.read(chartGameFlowControllerProvider.notifier).onSell(liveIndex);
       setState(() => _sellRemainingSec = 0);
     });
   }
@@ -126,11 +128,6 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     if (pnl > 0) return AppColors.upSegment;
     if (pnl < 0) return AppColors.downSegment;
     return AppColors.helperText;
-  }
-
-  double? _buyReferencePrice(ChartGameFlowState flow) {
-    if (!flow.hasPosition || flow.positionUnits <= 0 || flow.initialBetPoints <= 0) return null;
-    return flow.initialBetPoints / flow.positionUnits;
   }
 
   Future<void> _finishAndShowResult() async {
@@ -340,7 +337,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
                           currentIndex: _index,
                           playbackPosition: _playbackPosition,
                           pulse: (0.5 + sin(_pulse) * 0.5) * (0.55 + entryPulseWeight * 0.45),
-                          referencePrice: _buyReferencePrice(flow),
+                          referencePrice: flow.entryPrice,
                         ),
                       ),
                     ),

@@ -19,12 +19,37 @@ class HistoryScreen extends ConsumerWidget {
         actions: <Widget>[
           if (authState.isSignedIn)
             IconButton(
+              tooltip: '로그아웃',
               onPressed: authState.isLoading ? null : () => ref.read(authControllerProvider.notifier).signOut(),
               icon: const Icon(Icons.logout),
             ),
           if (authState.isSignedIn)
             IconButton(
-              onPressed: () => ref.read(recordsControllerProvider).clearCurrentUserRecords(),
+              tooltip: '기록 초기화',
+              onPressed: () async {
+                final bool? confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('기록 초기화'),
+                      content: const Text('현재 계정의 기록을 모두 삭제할까요?'),
+                      actions: <Widget>[
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('취소'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+                if (confirmed == true) {
+                  ref.read(recordsControllerProvider).clearCurrentUserRecords();
+                }
+              },
               icon: const Icon(Icons.delete_sweep_outlined),
             ),
         ],

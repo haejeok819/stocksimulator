@@ -34,6 +34,21 @@ class AppTheme {
         bodyMedium: TextStyle(color: Colors.white),
         bodySmall: TextStyle(color: AppColors.helperText),
       ),
+      cardTheme: CardThemeData(
+        color: AppColors.surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: AppColors.helperText,
+        textColor: Colors.white,
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: AppColors.helperText,
+        ),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
         indicatorColor: AppColors.action.withOpacity(0.25),
