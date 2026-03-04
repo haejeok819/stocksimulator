@@ -35,6 +35,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   double _entryPulse = 0;
   String? _executionLabel;
   bool _showExecutionOverlay = false;
+  double? _latestBuyReferencePrice;
 
   @override
   void initState() {
@@ -96,9 +97,18 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   void _buy() {
     if (_showExecutionOverlay) return;
     _showTradeExecution('매수 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onBuy(_index);
+      final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
+      if (flow.segment.isEmpty) {
+        return;
+      }
+      final int liveIndex = flow.currentIndex.clamp(0, flow.segment.length - 1);
+      final double executedBuyPrice = flow.segment[liveIndex].close;
+      ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = executedBuyPrice;
+      });
     });
   }
 
@@ -106,8 +116,12 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
     if (!_canSell(flow) || _showExecutionOverlay) return;
     _showTradeExecution('매도 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onSell(_index);
-      setState(() => _sellRemainingSec = 0);
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      ref.read(chartGameFlowControllerProvider.notifier).onSell(liveIndex);
+      setState(() {
+        _sellRemainingSec = 0;
+        _latestBuyReferencePrice = null;
+      });
     });
   }
 
@@ -129,8 +143,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   }
 
   double? _buyReferencePrice(ChartGameFlowState flow) {
-    if (!flow.hasPosition || flow.positionUnits <= 0 || flow.initialBetPoints <= 0) return null;
-    return flow.initialBetPoints / flow.positionUnits;
+    if (!flow.hasPosition || flow.positionUnits <= 0) return null;
+    return _latestBuyReferencePrice ?? flow.entryPrice;
   }
 
   Future<void> _finishAndShowResult() async {
