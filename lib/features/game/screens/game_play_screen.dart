@@ -74,8 +74,12 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
 
     ref.read(chartGameFlowControllerProvider.notifier).updateCurrentIndex(_index);
     if (mounted) {
-      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      final ChartGameFlowState updatedFlow = ref.read(chartGameFlowControllerProvider);
+      final int next = _computeSellRemaining(updatedFlow);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = updatedFlow.entryPrice;
+      });
     }
 
     if (_index >= maxIndex) {
