@@ -96,7 +96,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   void _buy() {
     if (_showExecutionOverlay) return;
     _showTradeExecution('매수 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onBuy(_index);
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
       setState(() => _sellRemainingSec = next);
     });
@@ -106,7 +107,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     final ChartGameFlowState flow = ref.read(chartGameFlowControllerProvider);
     if (!_canSell(flow) || _showExecutionOverlay) return;
     _showTradeExecution('매도 체결', () {
-      ref.read(chartGameFlowControllerProvider.notifier).onSell(_index);
+      final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
+      ref.read(chartGameFlowControllerProvider.notifier).onSell(liveIndex);
       setState(() => _sellRemainingSec = 0);
     });
   }
@@ -129,8 +131,8 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   }
 
   double? _buyReferencePrice(ChartGameFlowState flow) {
-    if (!flow.hasPosition || flow.positionUnits <= 0 || flow.initialBetPoints <= 0) return null;
-    return flow.initialBetPoints / flow.positionUnits;
+    if (!flow.hasPosition || flow.positionUnits <= 0) return null;
+    return flow.entryPrice;
   }
 
   Future<void> _finishAndShowResult() async {
