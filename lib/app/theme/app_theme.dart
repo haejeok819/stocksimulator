@@ -34,7 +34,7 @@ class AppTheme {
         bodyMedium: TextStyle(color: Colors.white),
         bodySmall: TextStyle(color: AppColors.helperText),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
