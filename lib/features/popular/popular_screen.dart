@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:stocksimulator/app/theme/app_theme.dart';
 import 'package:stocksimulator/data/models/stock_model.dart';
 import 'package:stocksimulator/data/repositories/stock_repository.dart';
 import 'package:stocksimulator/features/sim/screens/date_range_screen.dart';
@@ -29,7 +30,7 @@ class _PopularScreenState extends State<PopularScreen> {
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFF5677E7),
+                color: AppColors.action,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Center(
@@ -65,13 +66,17 @@ class _PopularScreenState extends State<PopularScreen> {
                     itemBuilder: (BuildContext context, int index) {
                       final StockModel stock = stocks[index];
                       return Card(
-                        color: const Color(0xFF2A2A33),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
-                          leading: Text('${stock.rank}'),
+                          leading: Text(
+                            '${stock.rank}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
                           title: Text(stock.displayName),
-                          subtitle: Text('${stock.ticker} · ${stock.market}'),
-                          trailing: const Icon(Icons.play_arrow),
+                          subtitle: Text(
+                            '${stock.ticker} · ${stock.market}',
+                            style: const TextStyle(color: AppColors.helperText),
+                          ),
+                          trailing: const Icon(Icons.play_arrow_rounded),
                           onTap: () {
                             final SimulationFlowState flow = SimulationFlowState();
                             flow.selectStock(stock);
