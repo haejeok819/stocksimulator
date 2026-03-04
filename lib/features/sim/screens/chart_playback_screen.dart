@@ -1,0 +1,1033 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:stocksimulator/app/theme/playback_design_tokens.dart';
+import 'package:stocksimulator/data/models/simulation_point.dart';
+import 'package:stocksimulator/features/records/models/attempt_record.dart';
+import 'package:stocksimulator/features/records/state/records_providers.dart';
+import 'package:stocksimulator/shared/auth/auth_providers.dart';
+import 'package:stocksimulator/features/sim/state/simulation_flow_state.dart';
+import 'package:stocksimulator/features/sim/widgets/stock_chart_player.dart';
+import 'package:stocksimulator/shared/services/ad_service.dart';
+import 'package:stocksimulator/shared/share/services/share_link_service.dart';
+import 'package:stocksimulator/shared/share/services/share_service.dart';
+import 'package:stocksimulator/shared/share/share_payload.dart';
+import 'package:stocksimulator/shared/share/widgets/share_card.dart';
+import 'package:stocksimulator/shared/utils/app_settings.dart';
+import 'package:stocksimulator/shared/utils/number_format.dart';
+
+class ChartPlaybackScreen extends StatefulWidget {
+  const ChartPlaybackScreen({
+    super.key,
+    required this.points,
+    required this.flowState,
+    required this.initialInvestment,
+  });
+
+  final List<SimulationPoint> points;
+  final SimulationFlowState flowState;
+  final int initialInvestment;
+
+  @override
+  State<ChartPlaybackScreen> createState() => _ChartPlaybackScreenState();
+}
+
+class _ChartPlaybackScreenState extends State<ChartPlaybackScreen> with SingleTickerProviderStateMixin {
+  Timer? _skipTimer;
+  late final Ticker _frameTicker;
+  bool _resultShown = false;
+  bool _showSkip = false;
+
+  int _index = 0;
+  double _playbackPosition = 0;
+  double _renderPosition = 0;
+  double _pulseTime = 0;
+  Duration? _lastFrameElapsed;
+  bool _playing = true;
+  double _speed = 1;
+
+  Timer? _speedUnlockTimer;
+  static const Duration _unlockDuration = Duration(minutes: 5);
+  static const double _globalPlaybackSpeedMultiplier = 3.0;
+  late final String _adSessionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _speed = 1;
+    _frameTicker = createTicker(_onFrameTick);
+    _adSessionId = 'SIM:${DateTime.now().microsecondsSinceEpoch}';
+    AdService.instance.startSession(_adSessionId);
+    AppSettings.speed8xUnlockedUntil.addListener(_on8xUnlockChanged);
+    _schedule8xUnlockExpiryCheck();
+    AdService.instance.preloadInterstitial();
+    AdService.instance.preloadRewarded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      final Duration delay = _isWindowsDesktop ? const Duration(milliseconds: 400) : Duration.zero;
+      Future<void>.delayed(delay, () {
+        if (mounted) {
+          _startPlayback();
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _skipTimer?.cancel();
+    _speedUnlockTimer?.cancel();
+    AppSettings.speed8xUnlockedUntil.removeListener(_on8xUnlockChanged);
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+    AdService.instance.endSession(_adSessionId);
+    _frameTicker.dispose();
+    super.dispose();
+  }
+
+
+
+
+
+
+
+  bool _pausePlaybackForInteraction() {
+    final bool wasPlaying = _playing;
+    _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+    return wasPlaying;
+  }
+
+  void _resumePlaybackIfNeeded(bool shouldResume) {
+    if (!mounted || !shouldResume) return;
+    setState(() {
+      _playing = true;
+      _lastFrameElapsed = null;
+      if (!_frameTicker.isActive) {
+        _frameTicker.start();
+      }
+    });
+  }
+
+
+
+
+  void _on8xUnlockChanged() {
+    _schedule8xUnlockExpiryCheck();
+    if (!mounted) return;
+    setState(() {
+      if (!AppSettings.is8xSpeedUnlocked && _speed == 8) {
+        _speed = 4;
+      }
+    });
+  }
+
+  void _schedule8xUnlockExpiryCheck() {
+    _speedUnlockTimer?.cancel();
+    final DateTime? unlockUntil = AppSettings.speed8xUnlockedUntil.value;
+    if (unlockUntil == null) {
+      return;
+    }
+
+    final Duration remaining = unlockUntil.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      if (AppSettings.speed8xUnlockedUntil.value != null) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+      return;
+    }
+
+    _speedUnlockTimer = Timer(remaining, () {
+      if (AppSettings.speed8xUnlockedUntil.value == unlockUntil) {
+        AppSettings.speed8xUnlockedUntil.value = null;
+      }
+    });
+  }
+
+  Future<bool> _showRewardedAdFor8xUnlock() async {
+    return AdService.instance.showRewardedFor8xUnlock();
+  }
+
+  Future<void> _onSpeedSelected(double selectedSpeed) async {
+    if (selectedSpeed != 8) {
+      if (!mounted) return;
+      setState(() {
+        _speed = selectedSpeed;
+        _lastFrameElapsed = null;
+      });
+      return;
+    }
+
+    if (AppSettings.is8xSpeedUnlocked) {
+      if (!mounted) return;
+      setState(() {
+        _speed = 8;
+        _lastFrameElapsed = null;
+      });
+      return;
+    }
+
+    final bool? shouldWatchAd = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('8x 스피드 잠금'),
+          content: const Text('광고를 보고나서 8x 스피드를 할 수 있어요.\n5분 동안은 광고가 뜨지 않아요.'),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('광고 보고 사용하기')),
+          ],
+        );
+      },
+    );
+
+    if (shouldWatchAd != true || !mounted) return;
+
+    final bool unlocked = await _showRewardedAdFor8xUnlock();
+    if (!mounted) return;
+
+    if (unlocked) {
+      AppSettings.unlock8xSpeedFor(_unlockDuration);
+      setState(() {
+        _speed = 8;
+        _lastFrameElapsed = null;
+      });
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('광고 시청이 완료되지 않아 8x 잠금이 해제되지 않았어요.')),
+    );
+  }
+
+  bool get _isWindowsDesktop {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.windows;
+  }
+
+  double get _basePointsPerSecond {
+    final int totalDays = widget.points.length;
+    final double baseSpeed;
+    if (totalDays <= 252) {
+      baseSpeed = _isWindowsDesktop ? 0.70 : 0.92;
+    } else if (totalDays <= 1260) {
+      baseSpeed = _isWindowsDesktop ? 2.0 : 2.6;
+    } else {
+      baseSpeed = _isWindowsDesktop ? 6.0 : 7.5;
+    }
+    return baseSpeed * _globalPlaybackSpeedMultiplier;
+  }
+
+  void _startPlayback() {
+    if (widget.points.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showResult());
+      return;
+    }
+
+    _skipTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() => _showSkip = true);
+      }
+    });
+
+    _playbackPosition = _index.toDouble();
+    _renderPosition = _playbackPosition;
+    _lastFrameElapsed = null;
+    if (!_frameTicker.isActive) {
+      _frameTicker.start();
+    }
+  }
+
+  void _onFrameTick(Duration elapsed) {
+    if (!mounted || !_playing || widget.points.isEmpty) return;
+
+    final Duration previous = _lastFrameElapsed ?? elapsed;
+    _lastFrameElapsed = elapsed;
+    final double dtSeconds = max(0, (elapsed - previous).inMicroseconds) / 1000000;
+    if (dtSeconds <= 0) return;
+
+    final int maxIndex = widget.points.length - 1;
+    final double velocity = _basePointsPerSecond * _speed;
+    final double nextPosition = (_playbackPosition + (velocity * dtSeconds)).clamp(0, maxIndex.toDouble());
+
+    _playbackPosition = nextPosition;
+    _renderPosition = _easedRenderPosition(nextPosition);
+    _pulseTime += dtSeconds * 5.0;
+
+    final int nextIndex = _playbackPosition.floor().clamp(0, maxIndex);
+    if (nextIndex != _index) {
+      _index = nextIndex;
+    }
+
+    setState(() {});
+
+    if (_playbackPosition >= maxIndex) {
+      _playing = false;
+      _showResult();
+    }
+  }
+
+  double _easedRenderPosition(double position) {
+    final int base = position.floor();
+    final double frac = position - base;
+    if (_speed > 1 || frac <= 0) return position;
+
+    final double eased = Curves.easeInOutSine.transform(frac);
+    final double strength = ((1.0 - _speed) / 0.5).clamp(0, 1);
+    return base + (frac + ((eased - frac) * strength));
+  }
+
+  Future<void> _onSkipPressed() async {
+    _playing = false;
+    _lastFrameElapsed = null;
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+
+    final int denominator = widget.points.length > 1 ? widget.points.length - 1 : 1;
+    final double progress = _index / denominator;
+    if (progress >= 0.8) {
+      await _showResult();
+      return;
+    }
+
+    await AdService.instance.tryShowInterstitialGate(
+      reason: 'sim_skip',
+      onProceed: _showResult,
+      onSkip: _showResult,
+    );
+  }
+
+  Future<void> _showResult() async {
+    if (_resultShown) return;
+    _resultShown = true;
+    _skipTimer?.cancel();
+    if (_frameTicker.isActive) {
+      _frameTicker.stop();
+    }
+
+    if (widget.points.isEmpty) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('데이터 없음'),
+            content: const Text('선택한 기간에 대한 데이터를 찾을 수 없습니다.'),
+            actions: <Widget>[TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('확인'))],
+          );
+        },
+      );
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    final int finalAmount = widget.points.last.value.round();
+    final int investedAmount = widget.initialInvestment;
+    final int profit = finalAmount - investedAmount;
+    final double profitRate = investedAmount == 0 ? 0 : (profit / investedAmount) * 100;
+
+    final String? uid = ProviderScope.containerOf(context, listen: false).read(authControllerProvider).user?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      final String stockName = widget.flowState.selectedStock?.displayName ?? widget.flowState.selectedStock?.ticker ?? '';
+      await ProviderScope.containerOf(context, listen: false).read(recordsControllerProvider).addRecord(
+        AttemptRecord(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          uid: uid,
+          mode: 'SIM',
+          tickerA: widget.flowState.selectedStock?.ticker ?? '',
+          nameA: stockName,
+          startYmd: widget.points.first.ymd.toString(),
+          endYmd: widget.points.last.ymd.toString(),
+          returnPctA: profitRate,
+          createdAtIso: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return _ResultDialog(
+          title: widget.flowState.selectedStock?.displayName ?? '시뮬레이션 결과',
+          periodText: '${_formatYmd(widget.points.first.ymd)} ~ ${_formatYmd(widget.points.last.ymd)}',
+          initialAmount: investedAmount,
+          finalAmount: finalAmount,
+          profit: profit,
+          profitRate: profitRate,
+          onRetry: () => Navigator.of(this.context).popUntil((Route<dynamic> route) => route.isFirst),
+          chartValues: widget.points.map((SimulationPoint point) => point.value).toList(),
+        );
+      },
+    );
+  }
+
+
+
+  String _visiblePeriodText() {
+    if (widget.points.isEmpty) {
+      return '-';
+    }
+    final int safeIndex = _index.clamp(0, widget.points.length - 1);
+    final int start = simVisibleStartIndex(totalCount: widget.points.length, currentIndex: safeIndex);
+    return '${_formatYmd(widget.points[start].ymd)} ~ ${_formatYmd(widget.points[safeIndex].ymd)}';
+  }
+
+  String _formatPriceByMarket(double price, String _marketCode) {
+    return '${AppNumberFormat.formatInt(price)}원';
+  }
+
+
+  double _speedLabelFontSize(BuildContext context) {
+    final double width = MediaQuery.sizeOf(context).width;
+    return (width * 0.028).clamp(11.0, 14.0).toDouble();
+  }
+
+  ButtonStyle _speedSegmentStyle(BuildContext context) {
+    return ButtonStyle(
+      minimumSize: MaterialStateProperty.all(const Size(54, 38)),
+      padding: MaterialStateProperty.all(const EdgeInsets.symmetric(horizontal: 8, vertical: 7)),
+      side: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const BorderSide(color: Color(0xFF6EA8FF), width: 1.25);
+        }
+        return const BorderSide(color: Color(0x3D7A8CC7), width: 1.0);
+      }),
+      foregroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.disabled)) {
+          return const Color(0xFF7F8391);
+        }
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFFF2F7FF);
+        }
+        return const Color(0xFFD2D8E8);
+      }),
+      backgroundColor: MaterialStateProperty.resolveWith((Set<MaterialState> states) {
+        if (states.contains(MaterialState.selected)) {
+          return const Color(0xFF243B66);
+        }
+        return const Color(0xFF1E2432);
+      }),
+      textStyle: MaterialStateProperty.all(
+        TextStyle(
+          fontSize: _speedLabelFontSize(context),
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+      shape: MaterialStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Text _speedTextLabel(BuildContext context, String value, {Color? color}) {
+    return Text(
+      value,
+      style: TextStyle(
+        fontSize: _speedLabelFontSize(context),
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textScaler: const TextScaler.linear(1.0),
+    );
+  }
+
+  String _formatYmd(int ymd) {
+    final String raw = ymd.toString().padLeft(8, '0');
+    return '${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasData = widget.points.isNotEmpty;
+    final SimulationPoint current = hasData ? widget.points[_index] : const SimulationPoint(ymd: 0, close: 0, value: 0);
+    final String marketCode = widget.flowState.marketCode;
+    final String startPriceText = hasData ? _formatPriceByMarket(widget.points.first.close, marketCode) : '-';
+    final String endPriceText = hasData ? _formatPriceByMarket(widget.points.last.close, marketCode) : '-';
+
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.flowState.selectedStock?.displayName ?? '차트'} 재생', style: PlaybackDesignTokens.title)),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (_, __) => KeyEventResult.handled,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: PlaybackDesignTokens.screenBackground),
+          child: Stack(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+              Text(_formatYmd(current.ymd), style: PlaybackDesignTokens.secondary),
+              const SizedBox(height: 4),
+              Text(_formatPriceByMarket(current.close, marketCode), style: PlaybackDesignTokens.headlineNumber),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  Text('시작 $startPriceText', style: PlaybackDesignTokens.secondary),
+                  Text('종료 $endPriceText', style: PlaybackDesignTokens.secondary),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  decoration: PlaybackDesignTokens.chartStageDecoration,
+                  child: Stack(
+                    children: <Widget>[
+                      const Positioned.fill(child: _SimGridPattern()),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: ValueListenableBuilder<bool>(
+                          valueListenable: AppSettings.chartMotionEnabled,
+                          builder: (BuildContext context, bool motionOn, _) {
+                            return StockChartPlayer(
+                              points: widget.points,
+                              currentIndex: _index,
+                              playbackPosition: _renderPosition,
+                              pulse: motionOn ? (sin(_pulseTime) + 1) / 2 : 0,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  _PlayButton(
+                    playing: _playing,
+                    onPressed: () => setState(() {
+                      _playing = !_playing;
+                      _lastFrameElapsed = null;
+                      if (_playing && !_frameTicker.isActive) {
+                        _frameTicker.start();
+                      } else if (!_playing && _frameTicker.isActive) {
+                        _frameTicker.stop();
+                      }
+                    }),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              ValueListenableBuilder<DateTime?>(
+                valueListenable: AppSettings.speed8xUnlockedUntil,
+                builder: (BuildContext context, DateTime? unlockUntil, _) {
+                  final bool is8xUnlocked = unlockUntil != null && DateTime.now().isBefore(unlockUntil);
+
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Color(0x3347A2FF),
+                          blurRadius: 16,
+                          spreadRadius: 0.7,
+                          offset: Offset(0, 4),
+                        ),
+                        BoxShadow(
+                          color: Color(0x1F8CCBFF),
+                          blurRadius: 24,
+                          spreadRadius: 1.2,
+                        ),
+                      ],
+                    ),
+                    child: SegmentedButton<double>(
+                      style: _speedSegmentStyle(context),
+                      showSelectedIcon: false,
+                      segments: <ButtonSegment<double>>[
+                        ButtonSegment<double>(value: 0.5, label: _speedTextLabel(context, '0.5x')),
+                        ButtonSegment<double>(value: 1, label: _speedTextLabel(context, '1x')),
+                        ButtonSegment<double>(value: 2, label: _speedTextLabel(context, '2x')),
+                        ButtonSegment<double>(value: 4, label: _speedTextLabel(context, '4x')),
+                        ButtonSegment<double>(
+                          value: 8,
+                          enabled: true,
+                          icon: Icon(
+                            is8xUnlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                            size: 15,
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                          label: _speedTextLabel(
+                            context,
+                            '8x',
+                            color: is8xUnlocked ? const Color(0xFFDCE9FF) : const Color(0xFF8B8B96),
+                          ),
+                        ),
+                      ],
+                      selected: <double>{_speed},
+                      onSelectionChanged: (Set<double> value) {
+                        _onSpeedSelected(value.first);
+                      },
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 10),
+              Text('현재 보이는 기간  ${_visiblePeriodText()}', style: PlaybackDesignTokens.secondary, textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
+              if (_showSkip)
+                Positioned(
+                  top: 14,
+                  right: 16,
+                  child: SafeArea(
+                    child: Builder(
+                      builder: (BuildContext context) {
+                        final double buttonWidth = (MediaQuery.sizeOf(context).width * 0.24).clamp(136.0, 210.0).toDouble();
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            boxShadow: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x735F8CFF),
+                                blurRadius: 10,
+                                spreadRadius: 0.6,
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: buttonWidth,
+                            height: 40,
+                            child: OutlinedButton(
+                              onPressed: _onSkipPressed,
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2F3E5F),
+                                foregroundColor: const Color(0xFFEAF0FF),
+                                side: const BorderSide(color: Color(0xC26E8BFF), width: 1),
+                                shape: const StadiumBorder(),
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.1),
+                              ),
+                              child: const Text('스킵', textAlign: TextAlign.center),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SimGridPattern extends StatelessWidget {
+  const _SimGridPattern();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _SimGridPainter());
+  }
+}
+
+class _SimGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint vPaint = Paint()..color = Colors.white.withOpacity(0.012)..strokeWidth = 1;
+    final Paint hPaint = Paint()..color = Colors.white.withOpacity(0.022)..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 42) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vPaint);
+    }
+    for (double y = 0; y < size.height; y += 34) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _PlayButton extends StatelessWidget {
+  const _PlayButton({required this.playing, required this.onPressed});
+
+  final bool playing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: PlaybackDesignTokens.playButtonDecoration(active: playing),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 32, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultDialog extends StatefulWidget {
+  const _ResultDialog({
+    required this.title,
+    required this.periodText,
+    required this.initialAmount,
+    required this.finalAmount,
+    required this.profit,
+    required this.profitRate,
+    required this.onRetry,
+    required this.chartValues,
+  });
+
+  final String title;
+  final String periodText;
+  final int initialAmount;
+  final int finalAmount;
+  final int profit;
+  final double profitRate;
+  final VoidCallback onRetry;
+  final List<double> chartValues;
+
+  @override
+  State<_ResultDialog> createState() => _ResultDialogState();
+}
+
+class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderStateMixin {
+  late final AnimationController _impactController;
+
+  bool get _isSafeMode {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
+
+  bool get _isPositive => widget.profitRate >= 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _impactController = AnimationController(vsync: this, duration: const Duration(milliseconds: 550))..forward();
+  }
+
+  @override
+  void dispose() {
+    _impactController.dispose();
+    super.dispose();
+  }
+
+
+  Future<void> _openShareBottomSheet() async {
+    final GlobalKey boundaryKey = GlobalKey();
+    final ShareService shareService = const ShareService();
+    final SimulationSharePayload payload = SimulationSharePayload(
+      title: widget.title,
+      periodText: widget.periodText,
+      investText: '투자금 ${AppNumberFormat.formatMoney(widget.initialAmount)}',
+      finalText: '최종 ${AppNumberFormat.formatMoney(widget.finalAmount)}',
+      returnText: AppNumberFormat.formatPercent(widget.profitRate),
+      badgeText: _isPositive ? 'SIMULATOR 결과' : 'SIMULATOR 리포트',
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1B1B22),
+      builder: (BuildContext sheetContext) {
+        bool isSharing = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setModalState) {
+            Future<void> onSharePressed() async {
+              setModalState(() {
+                isSharing = true;
+              });
+              try {
+                await shareService.shareSimulationCard(boundaryKey, payload, preferShortText: true);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('공유에 실패했습니다. 다시 시도해주세요.')),
+                  );
+                }
+              } finally {
+                if (context.mounted) {
+                  setModalState(() {
+                    isSharing = false;
+                  });
+                }
+              }
+            }
+
+            Future<void> onCopyLinkPressed() async {
+              final String message = await ShareLinkService.copyAppLink();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+              }
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    ShareChartCard(boundaryKey: boundaryKey, payload: payload, chartValues: widget.chartValues),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isSharing ? null : onSharePressed,
+                        icon: isSharing
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.share),
+                        label: const Text('이미지 공유하기'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: onCopyLinkPressed,
+                        icon: const Icon(Icons.link_rounded),
+                        label: const Text('한번 해봐 (링크 복사)'),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '카톡은 링크가 같이 안 붙을 수 있어요. 아래 버튼으로 링크를 복사해 붙여넣어 주세요.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFFA1A1A8)),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = _isPositive ? const Color(0xFF22C55E) : const Color(0xFFE54B4B);
+    final Color tint = _isPositive ? const Color(0x1A22C55E) : const Color(0x1AE54B4B);
+    final String badgeTitle = _isPositive ? '투자 성공!' : '투자 실패..';
+    final String badgeIcon = _isPositive ? '🎉' : '📉';
+    final String ctaLabel = _isPositive ? '다른 투자도 해보기' : '다른 투자도 해보기';
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: Colors.transparent,
+      child: Stack(
+        children: <Widget>[
+          if (!_isSafeMode)
+            AnimatedBuilder(
+              animation: _impactController,
+              builder: (_, __) {
+                final double burst = Curves.easeOut.transform(_impactController.value);
+                return Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment.center,
+                          radius: 0.15 + (burst * 1.3),
+                          colors: <Color>[
+                            Colors.white.withOpacity((1 - burst) * 0.18),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          AnimatedBuilder(
+            animation: _impactController,
+            builder: (_, __) {
+              final double flash = _isSafeMode ? 0 : (1 - Curves.easeOut.transform((_impactController.value * 2).clamp(0, 1))) * 0.22;
+              return Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22222B),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0x22FFFFFF)),
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20),
+                    if (_isPositive && widget.profitRate >= 30 && !_isSafeMode)
+                      BoxShadow(color: const Color(0x6622C55E), blurRadius: 24, spreadRadius: 1),
+                  ],
+                ),
+                child: Stack(
+                  children: <Widget>[
+                    if (flash > 0)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              color: Colors.white.withOpacity(flash),
+                            ),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed: _openShareBottomSheet,
+                                icon: const Icon(Icons.share, size: 20, color: Color(0xFFA1A1A8)),
+                              ),
+                              InkWell(
+                                onTap: () => Navigator.of(context).pop(),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4),
+                                  child: Icon(Icons.close, size: 20, color: Color(0xFFA1A1A8)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: tint,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                Text(badgeIcon, style: const TextStyle(fontSize: 24)),
+                                const SizedBox(height: 4),
+                                Text(badgeTitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 2),
+                                Text(AppNumberFormat.formatPercent(widget.profitRate), textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: accent)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          AnimatedBuilder(
+                            animation: _impactController,
+                            builder: (_, __) {
+                              final double t = Curves.easeOutBack.transform(_impactController.value.clamp(0, 1));
+                              final double y = (!_isPositive && widget.profitRate <= -20 && !_isSafeMode) ? (1 - t) * 12 : 0;
+                              return Opacity(
+                                opacity: _isSafeMode ? 1 : t.clamp(0, 1),
+                                child: Transform.translate(
+                                  offset: Offset(0, y),
+                                  child: Transform.scale(
+                                    scale: _isSafeMode ? 1 : (0.8 + (t * 0.3)).clamp(0.8, 1.1),
+                                    child: Text(
+                                      AppNumberFormat.formatPercent(widget.profitRate),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: accent),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A2A33),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0x1FFFFFFF)),
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                _MetricRow(label: '초기 투자금', value: AppNumberFormat.formatMoney(widget.initialAmount)),
+                                const SizedBox(height: 8),
+                                _MetricRow(label: '최종 평가금', value: AppNumberFormat.formatMoney(widget.finalAmount)),
+                                const SizedBox(height: 8),
+                                _MetricRow(label: '수익금', value: AppNumberFormat.formatMoney(widget.profit), valueColor: accent),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: widget.onRetry,
+                            style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 56)),
+                            child: Text(ctaLabel),
+                          ),
+                          const SizedBox(height: 10),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: const Color(0xFF6AA8FF).withOpacity(0.34),
+                                  blurRadius: 18,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: FilledButton.icon(
+                              onPressed: _openShareBottomSheet,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(double.infinity, 52),
+                                backgroundColor: const Color(0xFF3B82F6),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              icon: const Icon(Icons.share_rounded),
+                              label: const Text('이미지 공유하기'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({required this.label, required this.value, this.valueColor});
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        Text(label, style: const TextStyle(color: Color(0xFFA1A1A8), fontSize: 13)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: valueColor ?? Colors.white)),
+      ],
+    );
+  }
+}

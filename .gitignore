@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local generated stock price assets (not version-controlled)
+assets/prices/**
+!assets/prices/.gitkeep
+!assets/prices/KR/
+!assets/prices/KR/KR_top50_meta.json
