@@ -35,6 +35,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   double _entryPulse = 0;
   String? _executionLabel;
   bool _showExecutionOverlay = false;
+  double? _latestBuyReferencePrice;
 
   @override
   void initState() {
@@ -73,8 +74,12 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
 
     ref.read(chartGameFlowControllerProvider.notifier).updateCurrentIndex(_index);
     if (mounted) {
-      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      final ChartGameFlowState updatedFlow = ref.read(chartGameFlowControllerProvider);
+      final int next = _computeSellRemaining(updatedFlow);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = updatedFlow.entryPrice;
+      });
     }
 
     if (_index >= maxIndex) {
@@ -99,7 +104,10 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
       final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
       ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = executedBuyPrice;
+      });
     });
   }
 
