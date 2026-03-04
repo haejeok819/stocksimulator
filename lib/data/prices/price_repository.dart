@@ -11,6 +11,9 @@ class PriceRepository {
   final AssetIndexGenerator _assetIndex;
   static const int _minimumTradingDays = 30;
 
+  Future<Set<String>>? _manifestAssetsFuture;
+  Future<Set<String>>? _priceAssetsFuture;
+
   Future<List<String>> loadTop50TickersByAsset(AssetType assetType) async {
     _validateAssetType(assetType);
     final List<String> candidates = AssetPaths.assetPathMetaListCandidatesByAsset(assetType);
@@ -42,7 +45,7 @@ class PriceRepository {
     final String marketCode = assetType.code;
     final String assetPath = _assetIndex.flatYearAssetPath(market: marketCode, ticker: assetKey, year: year);
 
-    final List<String> keys = await _assetIndex.listPriceAssets();
+    final Set<String> keys = await _loadPriceAssets();
     if (!keys.contains(assetPath)) {
       throw StateError(
         'Requested asset does not exist. prefix=assets/prices/, assetType=$assetType, assetKey=$assetKey, year=$year, triedAssetPath=$assetPath',
@@ -78,8 +81,7 @@ class PriceRepository {
     }
 
     final String marketCode = assetType.code;
-    final AssetManifest manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    final Set<String> assetKeys = manifest.listAssets().toSet();
+    final Set<String> assetKeys = await _loadManifestAssets();
     final List<int> loadedYears = <int>[];
     final List<PricePoint> merged = <PricePoint>[];
 
@@ -122,9 +124,9 @@ class PriceRepository {
       throw StateError('선택한 기간에 거래 데이터가 없습니다. (${_formatYmd(start)} ~ ${_formatYmd(end)})');
     }
 
-    final List<PricePoint> filtered = merged
-        .where((PricePoint point) => point.ymd >= correctedStart.ymd && point.ymd <= correctedEnd.ymd)
-        .toList();
+    final int startIndex = _lowerBoundPricePointYmd(merged, correctedStart.ymd);
+    final int endExclusive = _upperBoundPricePointYmd(merged, correctedEnd.ymd);
+    final List<PricePoint> filtered = merged.sublist(startIndex, endExclusive);
 
     if (filtered.length < _minimumTradingDays) {
       throw StateError(
@@ -214,5 +216,49 @@ class PriceRepository {
     final String mm = date.month.toString().padLeft(2, '0');
     final String dd = date.day.toString().padLeft(2, '0');
     return '${date.year}.$mm.$dd';
+  }
+
+  Future<Set<String>> _loadManifestAssets() {
+    _manifestAssetsFuture ??= () async {
+      final AssetManifest manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      return manifest.listAssets().toSet();
+    }();
+    return _manifestAssetsFuture!;
+  }
+
+  Future<Set<String>> _loadPriceAssets() {
+    _priceAssetsFuture ??= () async {
+      final List<String> keys = await _assetIndex.listPriceAssets();
+      return keys.toSet();
+    }();
+    return _priceAssetsFuture!;
+  }
+
+  int _lowerBoundPricePointYmd(List<PricePoint> points, int target) {
+    int low = 0;
+    int high = points.length;
+    while (low < high) {
+      final int mid = low + ((high - low) >> 1);
+      if (points[mid].ymd < target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  }
+
+  int _upperBoundPricePointYmd(List<PricePoint> points, int target) {
+    int low = 0;
+    int high = points.length;
+    while (low < high) {
+      final int mid = low + ((high - low) >> 1);
+      if (points[mid].ymd <= target) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 }
