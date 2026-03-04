@@ -107,14 +107,14 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
       return;
     }
     if (isCheckingInToday) {
-      _showMessage('오늘은 이미 출석체크 했어요');
+      _showMessage('출석체크 완료 !');
       return;
     }
     try {
       await ref.read(gamePointControllerProvider.notifier).checkIn();
       _showMessage('+${GamePointService.checkInReward}P 출석체크 완료!');
     } on AlreadyCheckedInException {
-      _showMessage('오늘은 이미 출석체크 했어요');
+      _showMessage('출석체크 완료 !');
     } catch (error) {
       _showMessage(_resolveActionErrorMessage(error));
     }
@@ -127,7 +127,7 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     }
     try {
       await ref.read(gamePointControllerProvider.notifier).claimAdReward();
-      _showMessage('+${GamePointService.adRewardPoints}P 지급됐어요');
+      _showMessage('+${GamePointService.adRewardPoints}P가 지급됐어요');
     } catch (error) {
       _showMessage(_resolveActionErrorMessage(error));
     }
@@ -161,7 +161,7 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
   }
 
   String _resolveActionErrorMessage(Object error) {
-    if (error is AlreadyCheckedInException) return '오늘은 이미 출석체크 했어요';
+    if (error is AlreadyCheckedInException) return '출석체크 완료 !';
     if (error is FirebaseException) {
       if (error.code == 'permission-denied') {
         return '권한 오류: Firestore Rules에서 users/{uid} 및 game_point_ledger 쓰기 권한을 허용해주세요';
@@ -432,19 +432,9 @@ class GameRuleSummaryCard extends StatelessWidget {
                       '게임 규칙',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 20,
                         fontWeight: FontWeight.w700,
                       ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      '정산: 시장 대비 초과/미달분만 반영',
-                      style: TextStyle(color: AppColors.helperText, fontSize: 12.5),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      '승리: 시장 수익률보다 높으면 + / 낮으면 -',
-                      style: TextStyle(color: AppColors.helperText, fontSize: 12.5),
                     ),
                   ],
                 ),

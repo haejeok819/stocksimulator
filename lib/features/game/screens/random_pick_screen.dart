@@ -20,10 +20,11 @@ class _RandomPickScreenState extends ConsumerState<RandomPickScreen>
   static const List<String> _rollingCandidates = <String>[
     '삼성전자',
     'SK하이닉스',
-    '금(KRX)',
-    'USD/KRW',
+    '금',
+    '달러 환율',
     'NAVER',
     '현대차',
+    '카카오',
   ];
 
   late final AnimationController _slotController;

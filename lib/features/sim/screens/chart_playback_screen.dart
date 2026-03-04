@@ -831,9 +831,9 @@ class _ResultDialogState extends State<_ResultDialog> with SingleTickerProviderS
   Widget build(BuildContext context) {
     final Color accent = _isPositive ? const Color(0xFF22C55E) : const Color(0xFFE54B4B);
     final Color tint = _isPositive ? const Color(0x1A22C55E) : const Color(0x1AE54B4B);
-    final String badgeTitle = _isPositive ? '성공적인 투자!' : '아쉬운 결과';
+    final String badgeTitle = _isPositive ? '투자 성공!' : '투자 실패..';
     final String badgeIcon = _isPositive ? '🎉' : '📉';
-    final String ctaLabel = _isPositive ? '더 높은 수익 노리기' : '전략 다시 세우기';
+    final String ctaLabel = _isPositive ? '다른 투자도 해보기' : '다른 투자도 해보기';
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),

@@ -24,9 +24,9 @@ class GamePointService {
   final FirebaseFirestore? _firestore;
 
   static const int welcomePoints = 10000;
-  static const int checkInReward = 20;
-  static const int adRewardPoints = 30;
-  static const int gameEntryCost = 20;
+  static const int checkInReward = 1500;
+  static const int adRewardPoints = 500;
+  static const int gameEntryCost = 50;
 
   Stream<GameWallet?> walletStream(String uid) {
     final FirebaseFirestore? firestore = _firestore;

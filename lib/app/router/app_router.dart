@@ -17,7 +17,7 @@ class AppRouter {
 final List<Widget> mainTabs = <Widget>[
   const SimHomeScreen(),
   const BattleScreen(),
+  const GameTabScreen(),
   const HistoryScreen(),
   const SettingsScreen(),
-  const GameTabScreen(),
 ];

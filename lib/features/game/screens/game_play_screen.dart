@@ -66,7 +66,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     if (dt <= 0) return;
 
     final int maxIndex = flow.segment.length - 1;
-    _playbackPosition = (_playbackPosition + (2.2 * dt)).clamp(0, maxIndex.toDouble());
+    _playbackPosition = (_playbackPosition + (4.4 * dt)).clamp(0, maxIndex.toDouble());
     _index = _playbackPosition.floor();
     _pulse += dt * 4.4;
     _entryPulse = min(1, _entryPulse + (dt * 1.8));
@@ -206,7 +206,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     final double entryPulseWeight = Curves.easeOut.transform((_entryPulse / 0.55).clamp(0, 1));
     final String status = flow.isFinished
         ? '게임 종료'
-        : (flow.hasPosition ? '이 타이밍에 간다?' : '지금 판을 건다?');
+        : (flow.hasPosition ? '존버해야하나?' : '매수 드갈까?');
 
     return Scaffold(
       appBar: AppBar(title: Text(flow.assetName ?? '차트 게임')),

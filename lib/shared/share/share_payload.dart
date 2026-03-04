@@ -73,10 +73,10 @@ class ShareTextComposer {
     required String dateRange,
   }) {
     final List<String> templates = <String>[
-      '그때 샀다면… $assetName $percentReturn\n앱에서 직접 해보기 👇\n$appLink',
+      '그때 샀더라면…? $assetName $percentReturn\n앱에서 직접 해보기 👇\n$appLink',
       '$assetName $dateRange\n결과: $percentReturn ($initialValue→$finalValue)\n$appLink',
-      '같은 기간, 다른 선택은?\n$assetName $percentReturn\n$appLink',
-      '이 날 100만원 넣었다면?\n$assetName $percentReturn\n$appLink',
+      '삼성전자 vs SK하이닉스?\n$assetName $percentReturn\n$appLink',
+      '코로나 때 100만원 넣었다면?\n$assetName $percentReturn\n$appLink',
       '왜 나는 그때 안 샀을까…\n$assetName $percentReturn\n$appLink',
       '다른 종목은 어땠을까?\n$assetName $percentReturn\n$appLink',
     ];

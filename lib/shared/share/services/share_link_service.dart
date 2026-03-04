@@ -6,6 +6,6 @@ class ShareLinkService {
 
   static Future<String> copyAppLink() async {
     await Clipboard.setData(const ClipboardData(text: ShareTextComposer.appLink));
-    return '링크가 복사됐어요. 카톡에 붙여넣어 주세요.';
+    return '링크가 복사됐어요. 붙여넣기 해주세요.';
   }
 }

@@ -25,9 +25,9 @@ class _MainScaffoldState extends State<MainScaffold> {
         destinations: const <NavigationDestination>[
           NavigationDestination(icon: Icon(Icons.show_chart), label: '시뮬'),
           NavigationDestination(icon: Icon(Icons.sports_martial_arts), label: '대결'),
+          NavigationDestination(icon: Icon(Icons.videogame_asset_outlined), label: '게임'),
           NavigationDestination(icon: Icon(Icons.history), label: '기록'),
           NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
-          NavigationDestination(icon: Icon(Icons.videogame_asset_outlined), label: '게임'),
         ],
       ),
     );
