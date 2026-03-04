@@ -35,6 +35,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
   double _entryPulse = 0;
   String? _executionLabel;
   bool _showExecutionOverlay = false;
+  double? _latestBuyReferencePrice;
 
   @override
   void initState() {
@@ -73,8 +74,12 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
 
     ref.read(chartGameFlowControllerProvider.notifier).updateCurrentIndex(_index);
     if (mounted) {
-      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      final ChartGameFlowState updatedFlow = ref.read(chartGameFlowControllerProvider);
+      final int next = _computeSellRemaining(updatedFlow);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = updatedFlow.entryPrice;
+      });
     }
 
     if (_index >= maxIndex) {
@@ -98,8 +103,12 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     _showTradeExecution('매수 체결', () {
       final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
       ref.read(chartGameFlowControllerProvider.notifier).onBuy(liveIndex);
-      final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
-      setState(() => _sellRemainingSec = next);
+      final ChartGameFlowState updatedFlow = ref.read(chartGameFlowControllerProvider);
+      final int next = _computeSellRemaining(updatedFlow);
+      setState(() {
+        _sellRemainingSec = next;
+        _latestBuyReferencePrice = updatedFlow.entryPrice;
+      });
     });
   }
 
@@ -109,7 +118,10 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
     _showTradeExecution('매도 체결', () {
       final int liveIndex = ref.read(chartGameFlowControllerProvider).currentIndex;
       ref.read(chartGameFlowControllerProvider.notifier).onSell(liveIndex);
-      setState(() => _sellRemainingSec = 0);
+      setState(() {
+        _sellRemainingSec = 0;
+        _latestBuyReferencePrice = null;
+      });
     });
   }
 
@@ -132,7 +144,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
 
   double? _buyReferencePrice(ChartGameFlowState flow) {
     if (!flow.hasPosition || flow.positionUnits <= 0) return null;
-    return flow.entryPrice;
+    return _latestBuyReferencePrice ?? flow.entryPrice;
   }
 
   Future<void> _finishAndShowResult() async {
