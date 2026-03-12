@@ -6,6 +6,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import 'firebase_bootstrap.dart';
 import 'package:stocksimulator/app/app.dart';
+import 'package:stocksimulator/shared/config/ad_runtime_config.dart';
 import 'package:stocksimulator/shared/services/ad_service.dart';
 import 'package:stocksimulator/shared/storage/ads_removed_storage.dart';
 
@@ -17,9 +18,10 @@ Future<void> main() async {
   final bool isMobile = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
 
   final bool adsRemoved = await AdsRemovedStorage.getAdsRemoved();
-  AdService.instance.setAdsRemoved(adsRemoved);
+  final bool effectiveAdsRemoved = adsRemoved || AdRuntimeConfig.forceDisableAllAds;
+  AdService.instance.setAdsRemoved(effectiveAdsRemoved);
 
-  if (!adsRemoved && isMobile) {
+  if (!effectiveAdsRemoved && isMobile) {
     await MobileAds.instance.initialize();
   }
 

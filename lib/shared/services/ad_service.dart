@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:stocksimulator/shared/config/ad_runtime_config.dart';
 import 'package:stocksimulator/shared/utils/ad_helper.dart';
 
 class AdService {
@@ -24,11 +25,11 @@ class AdService {
   String? _currentSessionId;
   bool _interstitialShownInSession = false;
 
-  bool get adsRemoved => _adsRemoved;
+  bool get adsRemoved => _adsRemoved || AdRuntimeConfig.forceDisableAllAds;
 
   void setAdsRemoved(bool value) {
     _adsRemoved = value;
-    if (value) {
+    if (adsRemoved) {
       _interstitial?.dispose();
       _interstitial = null;
       _rewarded?.dispose();
@@ -51,7 +52,7 @@ class AdService {
   }
 
   bool canShowInterstitial({required String reason}) {
-    if (_adsRemoved || _currentSessionId == null) {
+    if (adsRemoved || _currentSessionId == null) {
       return false;
     }
     if (_interstitialShownInSession) {
@@ -81,7 +82,7 @@ class AdService {
   }
 
   Future<void> preloadInterstitial() async {
-    if (_adsRemoved || _loadingInterstitial || _interstitial != null) {
+    if (adsRemoved || _loadingInterstitial || _interstitial != null) {
       return;
     }
 
@@ -91,7 +92,7 @@ class AdService {
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (InterstitialAd ad) {
-          if (_adsRemoved) {
+          if (adsRemoved) {
             ad.dispose();
             _loadingInterstitial = false;
             return;
@@ -110,7 +111,7 @@ class AdService {
   }
 
   Future<void> preloadRewarded() async {
-    if (_adsRemoved || _loadingRewarded || _rewarded != null) {
+    if (adsRemoved || _loadingRewarded || _rewarded != null) {
       return;
     }
 
@@ -120,7 +121,7 @@ class AdService {
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (RewardedAd ad) {
-          if (_adsRemoved) {
+          if (adsRemoved) {
             ad.dispose();
             _loadingRewarded = false;
             return;
@@ -139,7 +140,7 @@ class AdService {
   }
 
   Future<InterstitialAd?> takeOrLoadInterstitial() async {
-    if (_adsRemoved) {
+    if (adsRemoved) {
       return null;
     }
 
@@ -149,11 +150,11 @@ class AdService {
       return cached;
     }
 
-    return AdHelper.loadInterstitial(adsRemoved: _adsRemoved);
+    return AdHelper.loadInterstitial(adsRemoved: adsRemoved);
   }
 
   Future<RewardedAd?> takeOrLoadRewarded() async {
-    if (_adsRemoved) {
+    if (adsRemoved) {
       return null;
     }
 
@@ -163,7 +164,7 @@ class AdService {
       return cached;
     }
 
-    return AdHelper.loadRewarded(adsRemoved: _adsRemoved);
+    return AdHelper.loadRewarded(adsRemoved: adsRemoved);
   }
 
   Future<bool> tryShowInterstitialGate({
@@ -229,7 +230,7 @@ class AdService {
   }
 
   Future<bool> showRewardedFor8xUnlock() async {
-    if (_adsRemoved) {
+    if (adsRemoved) {
       return true;
     }
 
