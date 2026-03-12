@@ -106,7 +106,7 @@ class _GamePlayScreenState extends ConsumerState<GamePlayScreen>
       final int next = _computeSellRemaining(ref.read(chartGameFlowControllerProvider));
       setState(() {
         _sellRemainingSec = next;
-        _latestBuyReferencePrice = executedBuyPrice;
+        // _latestBuyReferencePrice = executedBuyPrice;
       });
     });
   }
