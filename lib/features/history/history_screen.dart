@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:stocksimulator/features/records/state/records_providers.dart';
 import 'package:stocksimulator/features/records/widgets/records_list_view.dart';
-import 'package:stocksimulator/features/records/widgets/records_login_gate.dart';
+import 'package:stocksimulator/shared/widgets/login_gate.dart';
 import 'package:stocksimulator/shared/auth/auth_providers.dart';
 import 'package:stocksimulator/shared/auth/auth_state.dart';
 
@@ -54,7 +54,19 @@ class HistoryScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: authState.isSignedIn ? const RecordsListView() : const RecordsLoginGate(),
+      body: authState.isSignedIn
+          ? const RecordsListView()
+          : const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: LoginGateCard(
+                  title: '기록을 보려면 로그인 필요',
+                  description: '로그인하면 기기 변경 후에도 기록을 확인할 수 있어요.',
+                  buttonText: '구글로 로그인',
+                  icon: Icons.history_rounded,
+                ),
+              ),
+            ),
     );
   }
 }

@@ -11,6 +11,7 @@ import 'package:stocksimulator/shared/models/game_wallet.dart';
 import 'package:stocksimulator/shared/services/game_point_service.dart';
 import 'package:stocksimulator/shared/utils/date_key.dart';
 import 'package:stocksimulator/shared/utils/number_format.dart';
+import 'package:stocksimulator/shared/widgets/login_gate.dart';
 
 class GameTabScreen extends ConsumerStatefulWidget {
   const GameTabScreen({super.key});
@@ -69,9 +70,10 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
               isCheckingInToday: isCheckingInToday,
               onCheckInTap: () => _onCheckInTap(
                 isLoggedIn: isLoggedIn,
+                isWindowsGuest: isWindowsGuest,
                 isCheckingInToday: isCheckingInToday,
               ),
-              onAdTap: () => _onAdRewardTap(isLoggedIn: isLoggedIn, isWindows: isWindows),
+              onAdTap: () => _onAdRewardTap(isLoggedIn: isLoggedIn, isWindowsGuest: isWindowsGuest),
             ),
             if (hasPermissionIssue)
               Container(
@@ -93,6 +95,15 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
               isLoggedIn: isLoggedIn,
               onTap: () => _onGameEntryTap(isLoggedIn: isLoggedIn, isWindowsGuest: isWindowsGuest),
             ),
+            if (!isLoggedIn && !isWindowsGuest) ...<Widget>[
+              const SizedBox(height: 14),
+              const LoginGateCard(
+                title: '로그인하고 포인트와 기록을 저장해보세요',
+                description: '로그인 후 체크인, 보상, 기록 저장을 이용할 수 있어요.',
+                buttonText: '구글로 로그인',
+                icon: Icons.account_circle_outlined,
+              ),
+            ],
             const SizedBox(height: 18),
             GameRuleSummaryCard(onTap: _showRuleDialog),
           ],
@@ -101,9 +112,16 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     );
   }
 
-  Future<void> _onCheckInTap({required bool isLoggedIn, required bool isCheckingInToday}) async {
-    if (!isLoggedIn) {
-      _showMessage('로그인 후 이용할 수 있어요');
+  Future<void> _onCheckInTap({
+    required bool isLoggedIn,
+    required bool isWindowsGuest,
+    required bool isCheckingInToday,
+  }) async {
+    if (isWindowsGuest) {
+      _showMessage('모바일 로그인 후 이용할 수 있어요');
+      return;
+    }
+    if (!await _ensureLoggedInForAction(isLoggedIn: isLoggedIn, actionName: '출석체크')) {
       return;
     }
     if (isCheckingInToday) {
@@ -120,9 +138,12 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     }
   }
 
-  Future<void> _onAdRewardTap({required bool isLoggedIn, required bool isWindows}) async {
-    if (!isLoggedIn) {
-      _showMessage(isWindows ? '모바일 로그인 후 이용할 수 있어요' : '로그인 후 이용할 수 있어요');
+  Future<void> _onAdRewardTap({required bool isLoggedIn, required bool isWindowsGuest}) async {
+    if (isWindowsGuest) {
+      _showMessage('모바일 로그인 후 이용할 수 있어요');
+      return;
+    }
+    if (!await _ensureLoggedInForAction(isLoggedIn: isLoggedIn, actionName: '광고 보상 받기')) {
       return;
     }
     try {
@@ -134,8 +155,7 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
   }
 
   Future<void> _onGameEntryTap({required bool isLoggedIn, required bool isWindowsGuest}) async {
-    if (!isLoggedIn && !isWindowsGuest) {
-      _showMessage('로그인 후 이용할 수 있어요');
+    if (!isWindowsGuest && !await _ensureLoggedInForAction(isLoggedIn: isLoggedIn, actionName: '차트 게임 시작')) {
       return;
     }
 
@@ -151,6 +171,21 @@ class _GameTabScreenState extends ConsumerState<GameTabScreen> {
     );
   }
 
+  Future<bool> _ensureLoggedInForAction({required bool isLoggedIn, required String actionName}) async {
+    if (isLoggedIn || !mounted) {
+      return true;
+    }
+
+    final bool loggedIn = await showLoginRequiredBottomSheet(
+      context,
+      title: '로그인이 필요해요',
+      description: '$actionName 기능을 사용하려면 로그인해주세요.\n포인트와 기록이 계정에 안전하게 저장돼요.',
+      buttonText: '구글로 로그인',
+      icon: Icons.lock_person_outlined,
+    );
+
+    return loggedIn || ((ref.read(authControllerProvider).user?.uid ?? '').isNotEmpty);
+  }
 
   Future<void> _showRuleDialog() {
     return showDialog<void>(
