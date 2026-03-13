@@ -40,6 +40,28 @@ void main() {
     expect(snapped.closeB, <double>[200, 198]);
   });
 
+
+  test('normalizeBattleSeries handles pre-sorted inputs without reordering side effects', () {
+    final List<PricePoint> aSeries = <PricePoint>[
+      const PricePoint(ymd: 20240101, close: 100),
+      const PricePoint(ymd: 20240102, close: 110),
+      const PricePoint(ymd: 20240103, close: 120),
+    ];
+    final List<PricePoint> bSeries = <PricePoint>[
+      const PricePoint(ymd: 20240101, close: 200),
+      const PricePoint(ymd: 20240103, close: 220),
+    ];
+
+    final NormalizedBattleSeries normalized = normalizeBattleSeries(
+      aSeries: aSeries,
+      bSeries: bSeries,
+    );
+
+    expect(normalized.dates, <int>[20240101, 20240103]);
+    expect(normalized.closeA, <double>[100, 120]);
+    expect(normalized.closeB, <double>[200, 220]);
+  });
+
   test('normalizeBattleSeries returns empty when either side is empty', () {
     final NormalizedBattleSeries normalized = normalizeBattleSeries(
       aSeries: const <PricePoint>[],

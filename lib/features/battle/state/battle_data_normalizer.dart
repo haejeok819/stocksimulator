@@ -23,12 +23,15 @@ NormalizedBattleSeries normalizeBattleSeries({
     return _emptyNormalizedBattleSeries;
   }
 
-  final List<PricePoint> sortedA = List<PricePoint>.from(aSeries)..sort((PricePoint l, PricePoint r) => l.ymd.compareTo(r.ymd));
-  final List<PricePoint> sortedB = List<PricePoint>.from(bSeries)..sort((PricePoint l, PricePoint r) => l.ymd.compareTo(r.ymd));
+  final List<PricePoint> sortedA = _ensureSortedByDate(aSeries);
+  final List<PricePoint> sortedB = _ensureSortedByDate(bSeries);
+  final int maxIntersectionLength =
+      sortedA.length < sortedB.length ? sortedA.length : sortedB.length;
 
-  final List<int> dates = <int>[];
-  final List<double> closeA = <double>[];
-  final List<double> closeB = <double>[];
+  final List<int> dates = List<int>.filled(maxIntersectionLength, 0);
+  final List<double> closeA = List<double>.filled(maxIntersectionLength, 0);
+  final List<double> closeB = List<double>.filled(maxIntersectionLength, 0);
+  int writeIndex = 0;
   int i = 0;
   int j = 0;
   while (i < sortedA.length && j < sortedB.length) {
@@ -36,9 +39,10 @@ NormalizedBattleSeries normalizeBattleSeries({
     final PricePoint pointB = sortedB[j];
 
     if (pointA.ymd == pointB.ymd) {
-      dates.add(pointA.ymd);
-      closeA.add(pointA.close);
-      closeB.add(pointB.close);
+      dates[writeIndex] = pointA.ymd;
+      closeA[writeIndex] = pointA.close;
+      closeB[writeIndex] = pointB.close;
+      writeIndex += 1;
       i += 1;
       j += 1;
       continue;
@@ -51,8 +55,14 @@ NormalizedBattleSeries normalizeBattleSeries({
     }
   }
 
-  if (dates.isEmpty) {
+  if (writeIndex == 0) {
     return _emptyNormalizedBattleSeries;
+  }
+
+  if (writeIndex != maxIntersectionLength) {
+    dates.length = writeIndex;
+    closeA.length = writeIndex;
+    closeB.length = writeIndex;
   }
 
   return NormalizedBattleSeries(
@@ -60,6 +70,32 @@ NormalizedBattleSeries normalizeBattleSeries({
     closeA: List<double>.unmodifiable(closeA),
     closeB: List<double>.unmodifiable(closeB),
   );
+}
+
+List<PricePoint> _ensureSortedByDate(List<PricePoint> values) {
+  if (_isSortedByDate(values)) {
+    return values;
+  }
+
+  return List<PricePoint>.from(values)
+    ..sort((PricePoint l, PricePoint r) => l.ymd.compareTo(r.ymd));
+}
+
+bool _isSortedByDate(List<PricePoint> values) {
+  if (values.length < 2) {
+    return true;
+  }
+
+  int prev = values.first.ymd;
+  for (int index = 1; index < values.length; index += 1) {
+    final int current = values[index].ymd;
+    if (current < prev) {
+      return false;
+    }
+    prev = current;
+  }
+
+  return true;
 }
 
 NormalizedBattleSeries snapNormalizedSeriesToNearestRange({
